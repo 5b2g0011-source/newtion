@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // --- USERS COLLECTION ---
+    // Anyone can view user profiles (avatars & display names)
+    // Only the owner can create or update their own profile doc
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false; // Protect profiles from deletion
+    }
+
+    // --- NOTES COLLECTION ---
+    // Owner can read/write their own notes.
+    // Public published notes can be read by anyone.
+    match /notes/{noteId} {
+      allow read: if (resource.data.isPublished == true && resource.data.isPublic == true) || 
+                   (request.auth != null && resource.data.userId == request.auth.uid);
+                   
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      
+      allow update: if request.auth != null && 
+                    resource.data.userId == request.auth.uid && 
+                    request.resource.data.userId == request.auth.uid;
+                    
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    // --- COMMENTS COLLECTION ---
+    // Anyone can read comments.
+    // Authenticated users can write comments under their own userId.
+    // Only the author of the comment can delete it.
+    match /comments/{commentId} {
+      allow read: if true;
+      
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      
+      allow update: if false; // Comments cannot be edited once posted
+      
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    // --- MESSAGES COLLECTION (站內信與互傳筆記) ---
+    // 使用者必須是寄件者或收件者才能讀取或刪除信件
+    // 登入的使用者可以發送信件（senderId 必須與自己 uid 相同）
+    // 收件人可以更新信件狀態（例如：標示為已讀）
+    match /messages/{messageId} {
+      allow read: if request.auth != null && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+      allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
+      allow update: if request.auth != null && resource.data.receiverId == request.auth.uid;
+      allow delete: if request.auth != null && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+    }
+  }
+}
