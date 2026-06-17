@@ -4,7 +4,7 @@ import type { Note } from '../types';
 import { 
   Search, Plus, ChevronDown, ChevronRight, 
   Trash2, Globe, FileText, LogOut, User as UserIcon,
-  Library, Inbox, HelpCircle, X
+  Library, Inbox, HelpCircle, X, Key
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -640,6 +640,32 @@ export const Sidebar: React.FC = () => {
         flexDirection: 'column',
         gap: '4px'
       }}>
+        {/* 自訂 API 金鑰按鈕 */}
+        <button
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('open-ai-assistant', { detail: { openSettings: true } }));
+          }}
+          style={{
+            width: '100%',
+            padding: '8px 10px',
+            borderRadius: 'var(--radius-sm)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'transparent',
+            color: 'var(--text-secondary)',
+            fontSize: '13px',
+            fontWeight: 400,
+            textAlign: 'left',
+            transition: 'background var(--transition-fast)'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+        >
+          <Key size={15} style={{ color: 'var(--accent-warning)' }} />
+          <span>自訂 API 金鑰</span>
+        </button>
+
         {/* 使用說明按鈕 */}
         <button
           onClick={() => setShowHelpModal(true)}

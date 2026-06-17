@@ -28,7 +28,7 @@ export const AiAssistant: React.FC = () => {
   // Core state
   const [isOpen, setIsOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('newtion_openrouter_api_key') || import.meta.env.VITE_OPENROUTER_API_KEY || '');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('newtion_openrouter_api_key') || '');
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('newtion_openrouter_model') || 'google/gemini-2.5-flash');
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     const saved = localStorage.getItem('newtion_ai_chat_history');
@@ -57,6 +57,9 @@ export const AiAssistant: React.FC = () => {
       if (customEvent.detail?.prompt) {
         setInput(customEvent.detail.prompt);
       }
+      if (customEvent.detail?.openSettings) {
+        setShowSettings(true);
+      }
     };
     window.addEventListener('open-ai-assistant', handleOpenAI);
     return () => window.removeEventListener('open-ai-assistant', handleOpenAI);
@@ -83,7 +86,7 @@ export const AiAssistant: React.FC = () => {
       setApiKey(trimmedKey);
     } else {
       localStorage.removeItem('newtion_openrouter_api_key');
-      setApiKey(import.meta.env.VITE_OPENROUTER_API_KEY || '');
+      setApiKey('');
     }
     setSelectedModel(model);
     setShowSettings(false);
@@ -200,9 +203,6 @@ export const AiAssistant: React.FC = () => {
     setCopySuccess(id);
     setTimeout(() => setCopySuccess(null), 2000);
   };
-
-  const hasCustomKey = !!localStorage.getItem('newtion_openrouter_api_key');
-  const hasSystemKey = !!import.meta.env.VITE_OPENROUTER_API_KEY;
 
   return (
     <>
@@ -346,11 +346,11 @@ export const AiAssistant: React.FC = () => {
           >
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                OpenRouter API 金鑰 {hasSystemKey && !hasCustomKey && <span style={{ color: 'var(--accent-success)' }}>(已載入預設金鑰)</span>}
+                OpenRouter API 金鑰
               </label>
               <input
                 type="password"
-                placeholder={hasSystemKey ? "已套用系統預設金鑰 (可在此輸入自訂金鑰覆蓋)" : "sk-or-v1-..."}
+                placeholder="請輸入您的 sk-or-v1-... 金鑰"
                 defaultValue={localStorage.getItem('newtion_openrouter_api_key') || ''}
                 id="ai-api-key-input"
                 style={{
@@ -417,10 +417,10 @@ export const AiAssistant: React.FC = () => {
               <button
                 onClick={() => {
                   localStorage.removeItem('newtion_openrouter_api_key');
-                  setApiKey(import.meta.env.VITE_OPENROUTER_API_KEY || '');
+                  setApiKey('');
                   const keyEl = document.getElementById('ai-api-key-input') as HTMLInputElement;
                   if (keyEl) keyEl.value = '';
-                  alert(import.meta.env.VITE_OPENROUTER_API_KEY ? '已清除自訂金鑰，回復為系統預設金鑰' : '金鑰已清除');
+                  alert('已清除金鑰！');
                 }}
                 style={{
                   padding: '8px 12px',
