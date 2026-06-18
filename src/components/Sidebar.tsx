@@ -307,7 +307,7 @@ export const Sidebar: React.FC = () => {
   };
 
   const emptyTextStyle: React.CSSProperties = {
-    padding: '8px 12px',
+    padding: '24px 12px 8px 12px',
     fontSize: '11.5px',
     color: 'var(--text-muted)',
     textAlign: 'center'
@@ -529,8 +529,115 @@ export const Sidebar: React.FC = () => {
       }}>
         {/* Section: 私人 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', position: 'relative' }}>
-          <div style={sectionHeaderStyle}>
+          <div 
+            style={sectionHeaderStyle}
+            onMouseEnter={(e) => {
+              const btn = e.currentTarget.querySelector('.section-action-btn');
+              if (btn) (btn as HTMLElement).style.opacity = '1';
+            }}
+            onMouseLeave={(e) => {
+              if (!addMenuOpen) {
+                const btn = e.currentTarget.querySelector('.section-action-btn');
+                if (btn) (btn as HTMLElement).style.opacity = '0';
+              }
+            }}
+          >
             <span>私人</span>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <button
+                className="section-action-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setAddMenuOpen(!addMenuOpen);
+                }}
+                title="新增頁面/項目"
+                style={{
+                  opacity: addMenuOpen ? 1 : 0,
+                  padding: '2px',
+                  borderRadius: '4px',
+                  color: 'var(--text-muted)',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'opacity var(--transition-fast), color var(--transition-fast)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
+                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+              >
+                <Plus size={13} />
+              </button>
+
+              {addMenuOpen && (
+                <>
+                  <div 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAddMenuOpen(false);
+                    }}
+                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}
+                  />
+                  <div 
+                    className="glass-panel"
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 4px)',
+                      right: '0px',
+                      width: '160px',
+                      zIndex: 101,
+                      padding: '4px',
+                      borderRadius: 'var(--radius-md)',
+                      boxShadow: 'var(--shadow-lg)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                      background: 'var(--bg-popover)',
+                      border: '1px solid var(--border-color)',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAddMenuOpen(false);
+                        handleAddPage(null, 'note');
+                      }}
+                      style={addMenuItemStyle}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <span>📄 新增筆記頁面</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAddMenuOpen(false);
+                        handleAddPage(null, 'mindmap');
+                      }}
+                      style={addMenuItemStyle}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <span>🧠 新增心智圖</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAddMenuOpen(false);
+                        handleAddPage(null, 'quiz');
+                      }}
+                      style={addMenuItemStyle}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <span>❓ 新增線上測驗</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Unified List */}
@@ -548,87 +655,7 @@ export const Sidebar: React.FC = () => {
             )}
           </div>
 
-          {/* 新增按鈕 */}
-          <div style={{ position: 'relative', marginTop: '4px' }}>
-            <div
-              onClick={() => setAddMenuOpen(!addMenuOpen)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '6px 8px 6px 12px',
-                borderRadius: 'var(--radius-sm)',
-                cursor: 'pointer',
-                color: 'var(--text-secondary)',
-                transition: 'background var(--transition-fast)'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-            >
-              <Plus size={14} style={{ marginRight: '8px', color: 'var(--text-muted)' }} />
-              <span style={{ fontSize: '13px' }}>新增</span>
-            </div>
-            
-            {addMenuOpen && (
-              <>
-                <div 
-                  onClick={() => setAddMenuOpen(false)}
-                  style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}
-                />
-                <div 
-                  className="glass-panel"
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 4px)',
-                    left: '12px',
-                    width: '160px',
-                    zIndex: 101,
-                    padding: '4px',
-                    borderRadius: 'var(--radius-md)',
-                    boxShadow: 'var(--shadow-lg)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '2px',
-                    background: 'var(--bg-popover)',
-                    border: '1px solid var(--border-color)'
-                  }}
-                >
-                  <button
-                    onClick={() => {
-                      setAddMenuOpen(false);
-                      handleAddPage(null, 'note');
-                    }}
-                    style={addMenuItemStyle}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <span>📄 新增筆記頁面</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setAddMenuOpen(false);
-                      handleAddPage(null, 'mindmap');
-                    }}
-                    style={addMenuItemStyle}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <span>🧠 新增心智圖</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setAddMenuOpen(false);
-                      handleAddPage(null, 'quiz');
-                    }}
-                    style={addMenuItemStyle}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <span>❓ 新增線上測驗</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+
         </div>
       </div>
 

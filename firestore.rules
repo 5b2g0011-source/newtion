@@ -20,9 +20,10 @@ service cloud.firestore {
                    
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
       
-      allow update: if request.auth != null && 
-                    resource.data.userId == request.auth.uid && 
-                    request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null && (
+                    (resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid) ||
+                    (resource.data.isPublished == true && resource.data.isPublic == true && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']))
+                  );
                     
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }

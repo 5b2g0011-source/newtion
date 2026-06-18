@@ -79,7 +79,7 @@ export const AiAssistant: React.FC = () => {
     }
   }, [isOpen, apiKey]);
 
-  const handleSaveSettings = (key: string, model: string) => {
+  const handleSaveSettings = (key: string, model: string, imgbbKey: string) => {
     const trimmedKey = key.trim();
     if (trimmedKey) {
       localStorage.setItem('newtion_openrouter_api_key', trimmedKey);
@@ -87,6 +87,12 @@ export const AiAssistant: React.FC = () => {
     } else {
       localStorage.removeItem('newtion_openrouter_api_key');
       setApiKey('');
+    }
+    const trimmedImgbb = imgbbKey.trim();
+    if (trimmedImgbb) {
+      localStorage.setItem('newtion_imgbb_api_key', trimmedImgbb);
+    } else {
+      localStorage.removeItem('newtion_imgbb_api_key');
     }
     setSelectedModel(model);
     setShowSettings(false);
@@ -368,6 +374,45 @@ export const AiAssistant: React.FC = () => {
 
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                ImgBB 圖片上傳 API 金鑰 (選填)
+              </label>
+              <input
+                type="password"
+                placeholder="輸入您的 ImgBB 金鑰 (未填則預設為本地壓縮 base64)"
+                defaultValue={localStorage.getItem('newtion_imgbb_api_key') || ''}
+                id="imgbb-api-key-input"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'var(--bg-popover)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  outline: 'none',
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                <a
+                  href="https://api.imgbb.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontSize: '11px',
+                    color: 'var(--brand-primary)',
+                    textDecoration: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  獲取 ImgBB 金鑰 <ExternalLink size={10} />
+                </a>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
                 選擇 AI 模型
               </label>
               <select
@@ -396,8 +441,9 @@ export const AiAssistant: React.FC = () => {
                 onClick={() => {
                   const keyEl = document.getElementById('ai-api-key-input') as HTMLInputElement;
                   const modelEl = document.getElementById('ai-model-select') as HTMLSelectElement;
-                  if (keyEl && modelEl) {
-                    handleSaveSettings(keyEl.value, modelEl.value);
+                  const imgbbEl = document.getElementById('imgbb-api-key-input') as HTMLInputElement;
+                  if (keyEl && modelEl && imgbbEl) {
+                    handleSaveSettings(keyEl.value, modelEl.value, imgbbEl.value);
                   }
                 }}
                 style={{
@@ -417,10 +463,13 @@ export const AiAssistant: React.FC = () => {
               <button
                 onClick={() => {
                   localStorage.removeItem('newtion_openrouter_api_key');
+                  localStorage.removeItem('newtion_imgbb_api_key');
                   setApiKey('');
                   const keyEl = document.getElementById('ai-api-key-input') as HTMLInputElement;
+                  const imgbbEl = document.getElementById('imgbb-api-key-input') as HTMLInputElement;
                   if (keyEl) keyEl.value = '';
-                  alert('已清除金鑰！');
+                  if (imgbbEl) imgbbEl.value = '';
+                  alert('已清除所有金鑰！');
                 }}
                 style={{
                   padding: '8px 12px',

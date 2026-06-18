@@ -12,6 +12,52 @@ import {
 import confetti from 'canvas-confetti';
 import { uploadImage } from '../utils/upload';
 
+interface NoteTemplate {
+  name: string;
+  description: string;
+  icon: string;
+  content: string;
+}
+
+const NOTE_TEMPLATES: NoteTemplate[] = [
+  {
+    name: '會議記錄',
+    description: '記錄會議日期、出席者、議程、討論重點及後續待辦事項',
+    icon: '📝',
+    content: `# 📝 會議記錄：[會議主題]\n\n- **日期時間**：\${new Date().toLocaleDateString('zh-TW')} \n- **與會人員**：\n- **會議主席**：\n\n---\n\n## 🎯 會議議程\n1. \n2. \n\n## 💬 討論重點\n- **議題一：**\n  - 重點內容或決議\n- **議題二：**\n  - 重點內容或決議\n\n## 📅 後續待辦事項 (Action Items)\n- [ ] @負責人 工作項目一 (預計完成日: )\n- [ ] @負責人 工作項目二 (預計完成日: )\n\n> [!NOTE]\n> 下次會議預定於： 進行。\n`
+  },
+  {
+    name: '週計畫',
+    description: '安排本週核心目標，列出週一到週五的每日任務清單與反思',
+    icon: '📅',
+    content: `# 📅 週工作與學習計畫\n\n- **本週目標 (Weekly Goals)**：\n  1. \n  2. \n\n---\n\n## 🏃‍♂️ 每日任務清單\n\n### 星期一 (Monday)\n- [ ] \n- [ ] \n\n### 星期二 (Tuesday)\n- [ ] \n\n### 星期三 (Wednesday)\n- [ ] \n\n### 星期四 (Thursday)\n- [ ] \n\n### 星期五 (Friday)\n- [ ] \n\n---\n\n## 💡 心得與反思 (Reflections)\n- 本週收穫：\n- 待改善點：\n`
+  },
+  {
+    name: '專案規劃書',
+    description: '撰寫專案大綱、關鍵目標、開發時程里程碑與技術選型',
+    icon: '🚀',
+    content: `# 🚀 專案規劃書：[專案名稱]\n\n- **建立時間**：\n- **專案負責人**：\n- **目標受眾**：\n\n---\n\n## 📋 專案概述 (Overview)\n簡短描述這個專案要解決什麼問題，以及預期的商業或個人價值。\n\n## 🎯 關鍵目標 (Objectives)\n- [ ] 目標一：\n- [ ] 目標二：\n\n## 🗺️ 開發里程碑 (Milestones)\n- **第一階段：** 準備與設計 (預計完成: )\n- **第二階段：** 核心開發 (預計完成: )\n- **第三階段：** 測試與發布 (預計完成: )\n\n## 🛠️ 技術選型與資源\n- **前端：**\n- **後端：**\n- **資料庫：**\n\n> [!TIP]\n> 專案開始前，先透過心智圖梳理架構，能事半功倍！\n`
+  },
+  {
+    name: '讀書筆記',
+    description: '書籍名稱與評分，核心要點摘要、經典句子摘錄與讀後行動指南',
+    icon: '📚',
+    content: `# 📚 讀書筆記：[書名]\n\n- **作者**：\n- **閱讀日期**：\n- **個人評分**：⭐⭐⭐⭐⭐\n\n---\n\n## 📝 一句話總結\n這本書主要在講什麼？對你最大的啟發是什麼？\n\n## 💡 核心重點整理 (Key Takeaways)\n\n### 📌 重點一：\n詳細論述或書中論據。\n\n### 📌 重點二：\n詳細論述或書中論據。\n\n## 💬 佳句摘錄\n- *「在此處輸入書中感動你的佳句」* — 第 頁\n- *「在此處輸入書中感動你的佳句」* — 第 頁\n\n## 🏃‍♂️ 行動方針 (Action Plan)\n看完這本書後，我打算在日常生活中實踐的 3 件事：\n1. \n2. \n`
+  },
+  {
+    name: '個人日記',
+    description: '記錄今天的天氣、心情、亮點事件、感恩事物以及個人心得',
+    icon: '✍️',
+    content: `# ✍️ 個人日記：\n\n- **天氣**：☀️ / ☁️ / 🌧️\n- **心情**：😊 / 😐 / 😢\n- **關鍵字**：今天最特別的一件事\n\n---\n\n## 🌟 今日亮點 (Highlights)\n1. \n2. \n\n## 🙏 感恩日記 (Three Gratitudes)\n1. \n2. \n3. \n\n## 💭 今日省思與隨筆\n在此處自由書寫今天的想法、遭遇或心情...\n`
+  },
+  {
+    name: '程式開發筆記',
+    description: '撰寫演算法解題思路、代碼實作、時空複雜度分析與邊界條件測試',
+    icon: '💻',
+    content: `# 💻 程式開發與演算法筆記：[題目/功能名稱]\n\n- **語言 (Language)**：TypeScript / Python / C++\n- **難易度 (Difficulty)**：Easy / Medium / Hard\n- **日期 (Date)**：\n\n---\n\n## 🎯 題目 / 需求描述\n在此處簡短描述題目要求或開發需求...\n\n- **連結 (Link)**：[LeetCode # / GitHub Repo](url)\n\n## 💡 解題思路 / 設計架構\n詳細寫下解決方案、演算法選擇（例如：Dynamic Programming、Divide and Conquer）或是系統架構：\n\n1. **核心概念：** \n2. **步驟拆解：** \n\n## 🛠️ 程式碼實作 (Implementation)\n\n\`\`\`typescript\n// 在此處撰寫程式碼\nfunction solve() {\n  // TODO: Implement solution\n}\n\`\`\`\n\n## 📊 複雜度分析 (Complexity Analysis)\n- **時間複雜度 (Time Complexity)**：\\(O(N)\\) - 說明原因。\n- **空間複雜度 (Space Complexity)**：\\(O(1)\\) - 說明原因。\n\n## ⚠️ 邊界條件與測試 (Edge Cases & Verification)\n- **空輸入處理：**\n- **最大值/極端值：**\n- **測試結果：** Pass / Fail\n`
+  }
+];
+
 interface MarkdownEditorProps {
   noteId: string;
 }
@@ -28,6 +74,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
   const [showDownloadDropdown, setShowDownloadDropdown] = useState(false);
   const [isSaved, setIsSaved] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [bypassTemplates, setBypassTemplates] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -46,11 +93,27 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
     localContentRef.current = localContent;
   }, [localContent]);
 
+  const isNewNote = !bypassTemplates && (
+                    !note || !localContent || 
+                    localContent.trim() === '' || 
+                    localContent === `# ${note.title}\n\n從這裡開始編寫你的 Markdown 內容...` ||
+                    localContent.trim() === `# ${note.title}`);
+
+  const handleApplyTemplate = (tmpl: NoteTemplate) => {
+    if (window.confirm(`確定要套用「${tmpl.name}」範本嗎？這將會完全覆蓋目前的筆記內容！`)) {
+      setLocalContent(tmpl.content);
+      lastSavedContentRef.current = tmpl.content;
+      updateNote(noteId, { content: tmpl.content });
+      setIsSaved(true);
+    }
+  };
+
   // Sync localContent when active noteId changes
   useEffect(() => {
     if (note) {
       setLocalContent(note.content);
       lastSavedContentRef.current = note.content;
+      setBypassTemplates(false);
     }
   }, [noteId]);
 
@@ -924,87 +987,231 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
         style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}
       >
         
-        {/* LEFT: Raw Markdown Textarea Editor */}
-        {(viewMode === 'edit' || viewMode === 'split') && (
+        {isNewNote ? (
           <div style={{
-            width: viewMode === 'split' ? `${editorWidth}%` : '100%',
-            flex: viewMode === 'split' ? 'none' : 1,
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '40px 24px',
+            overflowY: 'auto',
+            background: 'var(--bg-editor)',
             height: '100%',
-            position: 'relative',
-            borderRight: (viewMode === 'split' && !isDragging) ? '1px solid var(--border-color)' : 'none'
+            width: '100%'
           }}>
-            <textarea
-              ref={textareaRef}
-              value={localContent}
-              onChange={handleChangeContent}
-              onScroll={handleEditorScroll}
-              onMouseEnter={() => activeScrollRef.current = 'editor'}
-              onMouseLeave={() => activeScrollRef.current = null}
-              onPaste={handlePaste}
-              onDrop={handleDrop}
-              placeholder="# 開始編寫 Markdown..."
-              style={{
+            <div style={{ maxWidth: '680px', width: '100%', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div>
+                <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '6px' }}>
+                  💡 選擇範本快速開始
+                </h2>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  選擇一個常用的結構化範本以省去排版時間，或是直接開始寫作！
+                </p>
+              </div>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '12px',
                 width: '100%',
-                height: '100%',
-                padding: '24px',
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                resize: 'none',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '14px',
-                lineHeight: '1.6',
-                color: 'var(--text-primary)'
-              }}
-            />
-          </div>
-        )}
+                textAlign: 'left'
+              }}>
+                {NOTE_TEMPLATES.map((tmpl) => (
+                  <div
+                    key={tmpl.name}
+                    className="glass-panel hover-scale"
+                    onClick={() => {
+                      setLocalContent(tmpl.content);
+                      lastSavedContentRef.current = tmpl.content;
+                      updateNote(noteId, { content: tmpl.content });
+                      setIsSaved(true);
+                    }}
+                    style={{
+                      padding: '16px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-color)',
+                      cursor: 'pointer',
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      transition: 'all var(--transition-fast)',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px'
+                    }}
+                  >
+                    <span style={{ fontSize: '24px', background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: 'var(--radius-sm)' }}>
+                      {tmpl.icon}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                        {tmpl.name}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                        {tmpl.description}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-        {/* Vertical Resizer Divider */}
-        {viewMode === 'split' && (
-          <div
-            onMouseDown={handleMouseDown}
-            style={{
-              width: '6px',
-              cursor: 'col-resize',
-              background: isDragging ? 'var(--brand-primary)' : 'var(--border-color)',
-              zIndex: 10,
-              position: 'relative',
-              transition: 'background var(--transition-fast)',
-              flexShrink: 0
-            }}
-          />
-        )}
-
-        {/* RIGHT: Live Previews Rendered HTML */}
-        {(viewMode === 'split' || viewMode === 'view') && (
-          <div style={{ flex: 1, height: '100%', display: 'flex', overflow: 'hidden' }}>
-            <div 
-              onMouseEnter={() => activeScrollRef.current = 'preview'}
-              onMouseLeave={() => activeScrollRef.current = null}
-              onScroll={handlePreviewScroll}
-              style={{ flex: 1, height: '100%', overflowY: 'auto' }}
-            >
-              <MarkdownPreview 
-                content={localContent} 
-                previewRef={previewRef}
-              />
+              <div style={{ marginTop: '12px' }}>
+                <button
+                  onClick={() => {
+                    setBypassTemplates(true);
+                    const emptyContent = `# ${note.title}\n\n`;
+                    setLocalContent(emptyContent);
+                    lastSavedContentRef.current = emptyContent;
+                    updateNote(noteId, { content: emptyContent });
+                    setIsSaved(true);
+                  }}
+                  className="hover-scale btn-glow"
+                  style={{
+                    padding: '10px 24px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--brand-primary)',
+                    color: '#ffffff',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-glow)',
+                    border: 'none'
+                  }}
+                >
+                  直接開始寫作（空白頁面）
+                </button>
+              </div>
             </div>
-            
-            {/* Auto outline Table of Contents (only visible in full preview or split screen) */}
+          </div>
+        ) : (
+          <>
+            {/* Docked templates vertical bar on the left */}
             <div style={{
-              width: '180px',
-              borderLeft: '1px solid var(--border-color)',
+              width: '42px',
+              borderRight: '1px solid var(--border-color)',
               display: 'flex',
               flexDirection: 'column',
-              flexShrink: 0
+              alignItems: 'center',
+              gap: '12px',
+              padding: '16px 0',
+              backgroundColor: 'rgba(255, 255, 255, 0.01)',
+              flexShrink: 0,
+              zIndex: 5
             }}>
-              <TableOfContents 
-                content={localContent}
-                previewElement={previewRef.current}
-              />
+              {NOTE_TEMPLATES.map((tmpl) => (
+                <button
+                  key={tmpl.name}
+                  onClick={() => handleApplyTemplate(tmpl)}
+                  title={`套用「${tmpl.name}」範本 (覆蓋目前內容)`}
+                  style={{
+                    width: '30px',
+                    height: '30px',
+                    borderRadius: 'var(--radius-md)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '16px',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'all var(--transition-fast)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
+                >
+                  {tmpl.icon}
+                </button>
+              ))}
             </div>
-          </div>
+
+            {/* LEFT: Raw Markdown Textarea Editor */}
+            {(viewMode === 'edit' || viewMode === 'split') && (
+              <div style={{
+                width: viewMode === 'split' ? `${editorWidth}%` : '100%',
+                flex: viewMode === 'split' ? 'none' : 1,
+                height: '100%',
+                position: 'relative',
+                borderRight: (viewMode === 'split' && !isDragging) ? '1px solid var(--border-color)' : 'none'
+              }}>
+                <textarea
+                  ref={textareaRef}
+                  value={localContent}
+                  onChange={handleChangeContent}
+                  onScroll={handleEditorScroll}
+                  onMouseEnter={() => activeScrollRef.current = 'editor'}
+                  onMouseLeave={() => activeScrollRef.current = null}
+                  onPaste={handlePaste}
+                  onDrop={handleDrop}
+                  placeholder="# 開始編寫 Markdown..."
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    padding: '24px',
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    resize: 'none',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '14px',
+                    lineHeight: '1.6',
+                    color: 'var(--text-primary)'
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Vertical Resizer Divider */}
+            {viewMode === 'split' && (
+              <div
+                onMouseDown={handleMouseDown}
+                style={{
+                  width: '6px',
+                  cursor: 'col-resize',
+                  background: isDragging ? 'var(--brand-primary)' : 'var(--border-color)',
+                  zIndex: 10,
+                  position: 'relative',
+                  transition: 'background var(--transition-fast)',
+                  flexShrink: 0
+                }}
+              />
+            )}
+
+            {/* RIGHT: Live Previews Rendered HTML */}
+            {(viewMode === 'split' || viewMode === 'view') && (
+              <div style={{ flex: 1, height: '100%', display: 'flex', overflow: 'hidden' }}>
+                <div 
+                  onMouseEnter={() => activeScrollRef.current = 'preview'}
+                  onMouseLeave={() => activeScrollRef.current = null}
+                  onScroll={handlePreviewScroll}
+                  style={{ flex: 1, height: '100%', overflowY: 'auto' }}
+                >
+                  <MarkdownPreview 
+                    content={localContent} 
+                    previewRef={previewRef}
+                  />
+                </div>
+                
+                {/* Auto outline Table of Contents (only visible in full preview or split screen) */}
+                <div style={{
+                  width: '180px',
+                  borderLeft: '1px solid var(--border-color)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  flexShrink: 0
+                }}>
+                  <TableOfContents 
+                    content={localContent}
+                    previewElement={previewRef.current}
+                  />
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         <input

@@ -124,6 +124,94 @@ const DIAGRAM_TEMPLATES: DiagramTemplate[] = [
       { id: 'e5', source: 'idea2', target: 'idea2_sub1' },
       { id: 'e6', source: 'root', target: 'idea3' },
     ]
+  },
+  {
+    name: '5W1H 分析模板',
+    description: '核心主題多維度結構化拆解',
+    nodes: [
+      { id: 'root', name: '5W1H 核心分析主題', x: 0, y: 0, width: 180, height: 50, color: '#0f172a', shape: 'rounded-rect', fontSize: 13 },
+      { id: 'what', name: '📝 What (要做什麼)\n核心內容與任務', x: -240, y: -100, width: 150, height: 46, color: '#3b82f6', shape: 'rect', fontSize: 12 },
+      { id: 'why', name: '🎯 Why (為什麼做)\n動機與預期目標', x: 0, y: -120, width: 150, height: 46, color: '#ef4444', shape: 'rect', fontSize: 12 },
+      { id: 'who', name: '👥 Who (由誰來做)\n負責人與利害關係人', x: 240, y: -100, width: 150, height: 46, color: '#10b981', shape: 'rect', fontSize: 12 },
+      { id: 'when', name: '📅 When (何時進行)\n時程規劃與截止日', x: -240, y: 100, width: 150, height: 46, color: '#f59e0b', shape: 'rect', fontSize: 12 },
+      { id: 'where', name: '📍 Where (在哪裡做)\n發佈管道與環境地點', x: 0, y: 120, width: 150, height: 46, color: '#8b5cf6', shape: 'rect', fontSize: 12 },
+      { id: 'how', name: '🛠️ How (如何執行)\n執行步驟與方法流程', x: 240, y: 100, width: 150, height: 46, color: '#06b6d4', shape: 'rect', fontSize: 12 },
+    ],
+    edges: [
+      { id: 'e_what', source: 'root', target: 'what' },
+      { id: 'e_why', source: 'root', target: 'why' },
+      { id: 'e_who', source: 'root', target: 'who' },
+      { id: 'e_when', source: 'root', target: 'when' },
+      { id: 'e_where', source: 'root', target: 'where' },
+      { id: 'e_how', source: 'root', target: 'how' },
+    ]
+  },
+  {
+    name: '魚骨因果分析圖',
+    description: '尋找根本原因 (人、機、料、法、環)',
+    nodes: [
+      { id: 'root', name: '🐟 核心待解決問題', x: 300, y: 0, width: 160, height: 50, color: '#ef4444', shape: 'diamond', fontSize: 13 },
+      { id: 'backbone', name: '主要魚骨幹', x: -100, y: 0, width: 250, height: 10, color: '#64748b', shape: 'rect' },
+      { id: 'people', name: '👥 人員 (People)', x: -200, y: -120, width: 140, height: 40, color: '#3b82f6', shape: 'rounded-rect', fontSize: 12 },
+      { id: 'people_sub1', name: '技能訓練不足', x: -160, y: -60, width: 100, height: 32, color: '#94a3b8', shape: 'ellipse', fontSize: 10 },
+      { id: 'process', name: '⚙️ 流程 (Process)', x: 0, y: -120, width: 140, height: 40, color: '#ec4899', shape: 'rounded-rect', fontSize: 12 },
+      { id: 'process_sub1', name: 'SOP未標準化', x: 40, y: -60, width: 100, height: 32, color: '#94a3b8', shape: 'ellipse', fontSize: 10 },
+      { id: 'tech', name: '💻 設備 (Machine)', x: 200, y: -120, width: 140, height: 40, color: '#10b981', shape: 'rounded-rect', fontSize: 12 },
+      { id: 'material', name: '📦 物料 (Material)', x: -200, y: 120, width: 140, height: 40, color: '#f59e0b', shape: 'rounded-rect', fontSize: 12 },
+      { id: 'env', name: '🌍 環境 (Environment)', x: 0, y: 120, width: 140, height: 40, color: '#8b5cf6', shape: 'rounded-rect', fontSize: 12 },
+    ],
+    edges: [
+      { id: 'e_bb', source: 'backbone', target: 'root' },
+      { id: 'e_peo', source: 'people', target: 'backbone' },
+      { id: 'e_peo_s1', source: 'people', target: 'people_sub1' },
+      { id: 'e_pro', source: 'process', target: 'backbone' },
+      { id: 'e_pro_s1', source: 'process', target: 'process_sub1' },
+      { id: 'e_tech', source: 'tech', target: 'backbone' },
+      { id: 'e_mat', source: 'material', target: 'backbone' },
+      { id: 'e_env', source: 'env', target: 'backbone' },
+    ]
+  },
+  {
+    name: 'OKR 目標與關鍵結果',
+    description: '規劃團隊或個人的目標架構',
+    nodes: [
+      { id: 'root', name: '🏆 年度核心 OKR 目標', x: 0, y: 0, width: 180, height: 50, color: '#d97706', shape: 'rounded-rect', fontSize: 13 },
+      { id: 'obj1', name: '🎯 目標 (Objective 1)\n提升產品使用者體驗', x: -220, y: -60, width: 160, height: 48, color: '#2563eb', shape: 'rounded-rect', fontSize: 12 },
+      { id: 'kr1_1', name: '📈 KR 1.1: 載入時間降低 50%', x: -380, y: -120, width: 150, height: 40, color: '#475569', shape: 'rect', fontSize: 11 },
+      { id: 'kr1_2', name: '📈 KR 1.2: 使用者滿意度達 4.5/5', x: -380, y: 0, width: 150, height: 40, color: '#475569', shape: 'rect', fontSize: 11 },
+      { id: 'obj2', name: '🎯 目標 (Objective 2)\n拓展亞太地區市場', x: 220, y: 60, width: 160, height: 48, color: '#059669', shape: 'rounded-rect', fontSize: 12 },
+      { id: 'kr2_1', name: '📈 KR 2.1: 簽署 5 家大型經銷商', x: 380, y: 0, width: 150, height: 40, color: '#475569', shape: 'rect', fontSize: 11 },
+      { id: 'kr2_2', name: '📈 KR 2.2: 亞太區營收增長 30%', x: 380, y: 120, width: 150, height: 40, color: '#475569', shape: 'rect', fontSize: 11 },
+    ],
+    edges: [
+      { id: 'e_obj1', source: 'root', target: 'obj1' },
+      { id: 'e_kr1_1', source: 'obj1', target: 'kr1_1' },
+      { id: 'e_kr1_2', source: 'obj1', target: 'kr1_2' },
+      { id: 'e_obj2', source: 'root', target: 'obj2' },
+      { id: 'e_kr2_1', source: 'obj2', target: 'kr2_1' },
+      { id: 'e_kr2_2', source: 'obj2', target: 'kr2_2' },
+    ]
+  },
+  {
+    name: 'PDCA 專案持續改善循環',
+    description: '計畫 - 執行 - 查核 - 行動',
+    nodes: [
+      { id: 'root', name: '🔄 PDCA 專案持續改善', x: 0, y: 0, width: 180, height: 50, color: '#8b5cf6', shape: 'rounded-rect', fontSize: 13 },
+      { id: 'plan', name: '📝 1. Plan (計畫)\n設定目標、流程與方針', x: -160, y: -100, width: 150, height: 46, color: '#3b82f6', shape: 'rounded-rect', fontSize: 12 },
+      { id: 'do', name: '⚙️ 2. Do (執行)\n付諸實踐、記錄數據', x: 160, y: -100, width: 150, height: 46, color: '#10b981', shape: 'rounded-rect', fontSize: 12 },
+      { id: 'check', name: '🔍 3. Check (查核)\n比對數據、評估效能', x: 160, y: 100, width: 150, height: 46, color: '#f59e0b', shape: 'rounded-rect', fontSize: 12 },
+      { id: 'act', name: '⚡ 4. Act (行動)\n標準化成功經驗、改善缺點', x: -160, y: 100, width: 150, height: 46, color: '#ef4444', shape: 'rounded-rect', fontSize: 12 },
+    ],
+    edges: [
+      { id: 'e_p', source: 'root', target: 'plan' },
+      { id: 'e_d', source: 'root', target: 'do' },
+      { id: 'e_c', source: 'root', target: 'check' },
+      { id: 'e_a', source: 'root', target: 'act' },
+      { id: 'e_pd', source: 'plan', target: 'do' },
+      { id: 'e_dc', source: 'do', target: 'check' },
+      { id: 'e_ca', source: 'check', target: 'act' },
+      { id: 'e_ap', source: 'act', target: 'plan' },
+    ]
   }
 ];
 
@@ -182,6 +270,42 @@ export const MindMap: React.FC<MindMapProps> = ({ note, readOnly = false }) => {
   useEffect(() => {
     setGraphData(initialGraphData);
   }, [initialGraphData]);
+
+  // Local state for mindmap title to prevent IME composition break
+  const [localTitle, setLocalTitle] = useState(note.title);
+  const lastSavedTitleRef = useRef(note.title);
+  const titleDebounceRef = useRef<any>(null);
+  const localTitleRef = useRef(localTitle);
+
+  // Keep localTitleRef in sync with state
+  useEffect(() => {
+    localTitleRef.current = localTitle;
+  }, [localTitle]);
+
+  // Sync localTitle when active note.id changes
+  useEffect(() => {
+    setLocalTitle(note.title);
+    lastSavedTitleRef.current = note.title;
+  }, [note.id]);
+
+  // Sync localTitle when note.title changes externally
+  useEffect(() => {
+    if (note.title !== lastSavedTitleRef.current) {
+      setLocalTitle(note.title);
+      lastSavedTitleRef.current = note.title;
+    }
+  }, [note.title]);
+
+  // Flush any pending save on note.id changes or component unmount
+  useEffect(() => {
+    return () => {
+      if (titleDebounceRef.current) {
+        clearTimeout(titleDebounceRef.current);
+        const finalTitle = localTitleRef.current || '未命名心智圖';
+        updateNote(note.id, { title: finalTitle });
+      }
+    };
+  }, [note.id]);
 
   // Selected Node State
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -488,6 +612,22 @@ export const MindMap: React.FC<MindMapProps> = ({ note, readOnly = false }) => {
       w = 80;
       h = 90;
       name = '資料庫';
+    } else if (shape === 'star') {
+      w = 85;
+      h = 85;
+      name = '星形';
+    } else if (shape === 'cloud') {
+      w = 110;
+      h = 70;
+      name = '雲朵';
+    } else if (shape === 'document') {
+      w = 80;
+      h = 100;
+      name = '文件';
+    } else if (shape === 'capsule') {
+      w = 120;
+      h = 45;
+      name = '膠囊形';
     }
 
     const newNode: GraphNode = {
@@ -619,12 +759,38 @@ export const MindMap: React.FC<MindMapProps> = ({ note, readOnly = false }) => {
   // Update note title (Header bar input)
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = e.target.value;
-    updateNote(note.id, { title: newTitle || '未命名心智圖' });
+    setLocalTitle(newTitle);
+
+    if (titleDebounceRef.current) {
+      clearTimeout(titleDebounceRef.current);
+    }
+
+    titleDebounceRef.current = setTimeout(() => {
+      const finalTitle = newTitle || '未命名心智圖';
+      lastSavedTitleRef.current = finalTitle;
+      updateNote(note.id, { title: finalTitle });
+      
+      // Sync root node name
+      const nextData = {
+        ...graphData,
+        nodes: graphData.nodes.map((n) => n.id === 'root' ? { ...n, name: finalTitle } : n)
+      };
+      setGraphData(nextData);
+      saveGraphData(nextData);
+    }, 500);
+  };
+
+  const handleTitleBlur = () => {
+    if (titleDebounceRef.current) {
+      clearTimeout(titleDebounceRef.current);
+    }
+    const finalTitle = localTitle || '未命名心智圖';
+    lastSavedTitleRef.current = finalTitle;
+    updateNote(note.id, { title: finalTitle });
     
-    // Sync root node name
     const nextData = {
       ...graphData,
-      nodes: graphData.nodes.map((n) => n.id === 'root' ? { ...n, name: newTitle || '未命名心智圖' } : n)
+      nodes: graphData.nodes.map((n) => n.id === 'root' ? { ...n, name: finalTitle } : n)
     };
     setGraphData(nextData);
     saveGraphData(nextData);
@@ -802,6 +968,62 @@ export const MindMap: React.FC<MindMapProps> = ({ note, readOnly = false }) => {
             />
           </g>
         );
+      case 'star':
+        return (
+          <polygon
+            points={`0,${-hh} ${hw * 0.22},${-hh * 0.27} ${hw},${-hh * 0.27} ${hw * 0.36},${hh * 0.2} ${hw * 0.6},${hh} 0,${hh * 0.5} ${-hw * 0.6},${hh} ${-hw * 0.36},${hh * 0.2} ${-hw},${-hh * 0.27} ${-hw * 0.22},${-hh * 0.27}`}
+            fill={fill}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            className="interactive-el"
+            style={{ transition: 'stroke var(--transition-fast)' }}
+          />
+        );
+      case 'cloud':
+        return (
+          <path
+            d={`M ${-hw + hh * 0.5} ${hh * 0.2} C ${-hw} ${hh * 0.2}, ${-hw} ${-hh * 0.4}, ${-hw + hh * 0.6} ${-hh * 0.4} C ${-hw + hh * 0.6} ${-hh * 0.8}, ${-hw * 0.2} ${-hh}, 0 ${-hh * 0.8} C ${hw * 0.2} ${-hh}, ${hw - hh * 0.6} ${-hh * 0.8}, ${hw - hh * 0.6} ${-hh * 0.4} C ${hw} ${-hh * 0.4}, ${hw} ${hh * 0.2}, ${hw - hh * 0.5} ${hh * 0.2} C ${hw - hh * 0.5} ${hh}, ${-hw + hh * 0.5} ${hh}, ${-hw + hh * 0.5} ${hh * 0.2} Z`}
+            fill={fill}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            className="interactive-el"
+            style={{ transition: 'stroke var(--transition-fast)' }}
+          />
+        );
+      case 'document':
+        return (
+          <g className="interactive-el">
+            <polygon
+              points={`${-hw},${-hh} ${hw - 10},${-hh} ${hw},${-hh + 10} ${hw},${hh} ${-hw},${hh}`}
+              fill={fill}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              style={{ transition: 'stroke var(--transition-fast)' }}
+            />
+            <polygon
+              points={`${hw - 10},${-hh} ${hw - 10},${-hh + 10} ${hw},${-hh + 10}`}
+              fill="rgba(255, 255, 255, 0.25)"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth / 1.5}
+            />
+          </g>
+        );
+      case 'capsule':
+        return (
+          <rect
+            x={-hw}
+            y={-hh}
+            width={node.width}
+            height={node.height}
+            rx={hh}
+            ry={hh}
+            fill={fill}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            className="interactive-el"
+            style={{ transition: 'stroke var(--transition-fast)' }}
+          />
+        );
       case 'rounded-rect':
       default:
         return (
@@ -850,8 +1072,9 @@ export const MindMap: React.FC<MindMapProps> = ({ note, readOnly = false }) => {
             <span style={{ fontSize: '15px' }}>🧠</span>
             <input
               type="text"
-              value={note.title}
+              value={localTitle}
               onChange={handleTitleChange}
+              onBlur={handleTitleBlur}
               placeholder="未命名心智圖"
               style={{
                 fontSize: '18px',
@@ -1283,6 +1506,46 @@ export const MindMap: React.FC<MindMapProps> = ({ note, readOnly = false }) => {
             >
               <svg width="12" height="14" viewBox="0 0 14 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--text-primary)' }}><ellipse cx="7" cy="3" rx="6" ry="2"/><path d="M1,3 L1,13 A6,2 0 0,0 13,13 L13,3"/></svg>
             </button>
+            {/* Star Button */}
+            <button
+              onClick={() => handleAddFloatingNode('star')}
+              title="星形"
+              style={shapeSelectorBtnStyle}
+              onMouseEnter={(e)=>e.currentTarget.style.borderColor='var(--brand-primary)'}
+              onMouseLeave={(e)=>e.currentTarget.style.borderColor='var(--border-color)'}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--text-primary)' }}><polygon points="8,1.5 10.3,6.2 15.5,7 11.8,10.6 12.6,15.8 8,13.3 3.4,15.8 4.2,10.6 0.5,7 5.7,6.2"/></svg>
+            </button>
+            {/* Cloud Button */}
+            <button
+              onClick={() => handleAddFloatingNode('cloud')}
+              title="雲朵"
+              style={shapeSelectorBtnStyle}
+              onMouseEnter={(e)=>e.currentTarget.style.borderColor='var(--brand-primary)'}
+              onMouseLeave={(e)=>e.currentTarget.style.borderColor='var(--border-color)'}
+            >
+              <svg width="14" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--text-primary)' }}><path d="M4.5,3.5 A2.5,2.5 0 0,1 9.5,3 A3.5,3.5 0 0,1 15,6.5 A2.5,2.5 0 0,1 12.5,9.5 L3.5,9.5 A2.5,2.5 0 0,1 1,7 A2.5,2.5 0 0,1 4.5,3.5 Z"/></svg>
+            </button>
+            {/* Document Button */}
+            <button
+              onClick={() => handleAddFloatingNode('document')}
+              title="文件"
+              style={shapeSelectorBtnStyle}
+              onMouseEnter={(e)=>e.currentTarget.style.borderColor='var(--brand-primary)'}
+              onMouseLeave={(e)=>e.currentTarget.style.borderColor='var(--border-color)'}
+            >
+              <svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--text-primary)' }}><path d="M1,1 L8,1 L11,4 L11,13 L1,13 Z M8,1 L8,4 L11,4"/></svg>
+            </button>
+            {/* Capsule Button */}
+            <button
+              onClick={() => handleAddFloatingNode('capsule')}
+              title="膠囊形"
+              style={shapeSelectorBtnStyle}
+              onMouseEnter={(e)=>e.currentTarget.style.borderColor='var(--brand-primary)'}
+              onMouseLeave={(e)=>e.currentTarget.style.borderColor='var(--border-color)'}
+            >
+              <div style={{ width: '16px', height: '8px', border: '1.5px solid var(--text-primary)', borderRadius: '4px' }} />
+            </button>
           </div>
         </div>
       )}
@@ -1702,6 +1965,10 @@ export const MindMap: React.FC<MindMapProps> = ({ note, readOnly = false }) => {
             <option value="hexagon">六角形</option>
             <option value="parallelogram">平行四邊形</option>
             <option value="cylinder">資料庫</option>
+            <option value="star">星形</option>
+            <option value="cloud">雲朵</option>
+            <option value="document">文件</option>
+            <option value="capsule">膠囊形</option>
           </select>
 
           {/* Delete node */}

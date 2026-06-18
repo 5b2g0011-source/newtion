@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { Note, Quiz, Question } from '../types';
-import { parseQuiz, serializeTOML, serializeJSON } from '../utils/quizParser';
+import { parseQuiz, serializeTOML, serializeJSON, parsePlainTextQuiz } from '../utils/quizParser';
 import { useApp } from '../context/AppContext';
 import { 
   Play, Edit3, Plus, Trash2, Upload, HelpCircle, 
   CheckCircle2, XCircle, RefreshCw, ArrowRight, X,
-  Share2, Globe, Lock
+  Share2, Globe, Lock, Sparkles, FileText
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Chart } from 'chart.js/auto';
@@ -16,7 +16,7 @@ interface QuizViewProps {
 }
 
 export const QuizView: React.FC<QuizViewProps> = ({ note, readOnly = false }) => {
-  const { updateNote, users, currentUser, sendMessage } = useApp();
+  const { updateNote, users, currentUser, sendMessage, notes } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-detect format from content
@@ -40,6 +40,75 @@ export const QuizView: React.FC<QuizViewProps> = ({ note, readOnly = false }) =>
   useEffect(() => {
     setQuiz(parsedQuiz);
   }, [parsedQuiz]);
+
+  // Local state for quiz title and description to prevent IME composition break
+  const [localTitle, setLocalTitle] = useState(quiz ? quiz.title : '');
+  const [localDescription, setLocalDescription] = useState(quiz ? quiz.description : '');
+
+  const localTitleRef = useRef(localTitle);
+  const localDescriptionRef = useRef(localDescription);
+
+  const lastSavedTitleRef = useRef(quiz ? quiz.title : '');
+  const lastSavedDescRef = useRef(quiz ? quiz.description : '');
+
+  const metaDebounceRef = useRef<any>(null);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    localTitleRef.current = localTitle;
+  }, [localTitle]);
+
+  useEffect(() => {
+    localDescriptionRef.current = localDescription;
+  }, [localDescription]);
+
+  // Sync states when active note ID changes
+  useEffect(() => {
+    if (parsedQuiz) {
+      setLocalTitle(parsedQuiz.title || '');
+      setLocalDescription(parsedQuiz.description || '');
+      lastSavedTitleRef.current = parsedQuiz.title || '';
+      lastSavedDescRef.current = parsedQuiz.description || '';
+    }
+  }, [note.id]);
+
+  // Sync states when quiz changes externally
+  useEffect(() => {
+    if (quiz) {
+      if (quiz.title !== lastSavedTitleRef.current) {
+        setLocalTitle(quiz.title || '');
+        lastSavedTitleRef.current = quiz.title || '';
+      }
+      if (quiz.description !== lastSavedDescRef.current) {
+        setLocalDescription(quiz.description || '');
+        lastSavedDescRef.current = quiz.description || '';
+      }
+    }
+  }, [quiz?.title, quiz?.description]);
+
+  // Flush any pending save on note.id changes or component unmount
+  useEffect(() => {
+    return () => {
+      if (metaDebounceRef.current) {
+        clearTimeout(metaDebounceRef.current);
+        saveMetaForcefully();
+      }
+    };
+  }, [note.id]);
+
+  const saveMetaForcefully = () => {
+    if (!parsedQuiz) return;
+    const title = localTitleRef.current;
+    const description = localDescriptionRef.current;
+    lastSavedTitleRef.current = title;
+    lastSavedDescRef.current = description;
+
+    // We must merge with current parsedQuiz to avoid losing other properties (like questions)
+    const updatedQuiz = { ...parsedQuiz, title, description };
+    updateNote(note.id, { title });
+    const content = currentFormat === 'json' ? serializeJSON(updatedQuiz) : serializeTOML(updatedQuiz);
+    updateNote(note.id, { content });
+  };
 
   // Tab State: play (進行測驗) or edit (編輯測驗)
   const [tab, setTab] = useState<'play' | 'edit'>('play');
@@ -98,6 +167,20 @@ export const QuizView: React.FC<QuizViewProps> = ({ note, readOnly = false }) =>
   const [modalOptions, setModalOptions] = useState<string[]>(['選項 A', '選項 B']);
   const [modalAnswer, setModalAnswer] = useState(0);
   const [modalExplanation, setModalExplanation] = useState('');
+
+  // AI Generation States
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiSource, setAiSource] = useState<'topic' | 'note'>('topic');
+  const [aiTopic, setAiTopic] = useState('');
+  const [aiSelectedNoteId, setAiSelectedNoteId] = useState('');
+  const [aiNumQuestions, setAiNumQuestions] = useState(5);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiApiKey, setAiApiKey] = useState(() => localStorage.getItem('newtion_openrouter_api_key') || '');
+  const [aiModel, setAiModel] = useState(() => localStorage.getItem('newtion_openrouter_model') || 'google/gemini-2.5-flash');
+
+  // Text Import States
+  const [textImportModalOpen, setTextImportModalOpen] = useState(false);
+  const [rawImportText, setRawImportText] = useState('');
 
   // Handle format switch
   const handleFormatChange = (newFormat: 'json' | 'toml') => {
@@ -161,6 +244,189 @@ export const QuizView: React.FC<QuizViewProps> = ({ note, readOnly = false }) =>
     setQuizStarted(false);
     setQuizFinished(false);
     setCurrentIdx(0);
+  };
+
+  // AI Quiz Generation
+  const handleAiGenerateQuiz = async () => {
+    if (!aiApiKey.trim()) {
+      alert('請先設定您的 OpenRouter API 金鑰！');
+      return;
+    }
+    setAiLoading(true);
+
+    // Save settings
+    localStorage.setItem('newtion_openrouter_api_key', aiApiKey.trim());
+    localStorage.setItem('newtion_openrouter_model', aiModel);
+
+    // Build the prompt
+    let sourceContext = '';
+    if (aiSource === 'note') {
+      const selectedNote = notes.find(n => n.id === aiSelectedNoteId);
+      if (selectedNote) {
+        sourceContext = `以下是目前選定筆記的內容：\n\n---\n標題: ${selectedNote.title}\n內容:\n${selectedNote.content}\n---\n\n請根據這篇筆記的內容出題。`;
+      } else {
+        alert('請先選擇一個筆記作為出題來源！');
+        setAiLoading(false);
+        return;
+      }
+    } else {
+      if (!aiTopic.trim()) {
+        alert('請輸入出題的主題或關鍵字！');
+        setAiLoading(false);
+        return;
+      }
+      sourceContext = `請根據以下主題/關鍵字出題：\n主題/關鍵字: ${aiTopic.trim()}`;
+    }
+
+    const systemPrompt = `You are an expert quiz generator. Your task is to output a single JSON object representing a quiz.
+The JSON object must contain the following keys:
+- title: A short string title for this quiz (in Traditional Chinese)
+- description: A short description of the quiz topic (in Traditional Chinese)
+- questions: An array of question objects, where each object has:
+  - question: The question text (in Traditional Chinese)
+  - options: An array of 2 to 4 options (strings, in Traditional Chinese)
+  - answer: A 0-indexed integer pointing to the correct option index in options
+  - explanation: A detailed explanation/rationale of the answer (in Traditional Chinese)
+
+CRITICAL RULES:
+1. Output ONLY the raw JSON string. DO NOT wrap it in markdown block formatting (like \`\`\`json). DO NOT write any other introduction, commentary or summary.
+2. Return exactly ${aiNumQuestions} questions.
+3. The content must be in Traditional Chinese.`;
+
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${aiApiKey.trim()}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': window.location.origin || 'http://localhost:5173',
+          'X-Title': 'Newtion AI Assistant',
+        },
+        body: JSON.stringify({
+          model: aiModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: sourceContext }
+          ],
+          max_tokens: 3000
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData?.error?.message || `API 錯誤: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const aiContent = data?.choices?.[0]?.message?.content || '';
+
+      if (!aiContent.trim()) {
+        throw new Error('AI 返回了空結果。');
+      }
+
+      // Parse JSON from output
+      let cleanedText = aiContent.trim();
+      if (cleanedText.startsWith('```')) {
+        cleanedText = cleanedText.replace(/^```[a-zA-Z]*\n/, '').replace(/\n```$/, '');
+      }
+
+      const parsedJson = JSON.parse(cleanedText);
+      if (!parsedJson || !Array.isArray(parsedJson.questions)) {
+        throw new Error('AI 返回的格式不正確，找不到 questions 陣列。');
+      }
+
+      // Standardize/normalize questions
+      const generatedQuestions = parsedJson.questions.map((q: any, idx: number) => ({
+        id: `q-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
+        question: q.question || '未命名問題',
+        options: Array.isArray(q.options) ? q.options.map(String) : ['選項 A', '選項 B'],
+        answer: typeof q.answer === 'number' ? q.answer : 0,
+        explanation: q.explanation || ''
+      }));
+
+      const isDefaultTemplate = quiz && quiz.questions.length === 1 && quiz.questions[0].id === 'q-1';
+
+      if (quiz && quiz.questions.length > 0 && !isDefaultTemplate) {
+        // Append mode
+        const updatedQuiz = {
+          ...quiz,
+          questions: [...quiz.questions, ...generatedQuestions]
+        };
+        const content = currentFormat === 'json' ? serializeJSON(updatedQuiz) : serializeTOML(updatedQuiz);
+        updateNote(note.id, { content });
+        alert(`成功利用 AI 額外生成並追加了 ${generatedQuestions.length} 題問題！`);
+      } else {
+        // Initialize or Overwrite default template mode
+        const newQuiz: Quiz = {
+          title: parsedJson.title || note.title || 'AI 智慧測驗',
+          description: parsedJson.description || '由 Newtion AI 自動生成的測驗。',
+          questions: generatedQuestions
+        };
+        const content = serializeJSON(newQuiz);
+        updateNote(note.id, { content, title: newQuiz.title });
+        setTab('play');
+        setQuizStarted(false);
+        setQuizFinished(false);
+        setCurrentIdx(0);
+        alert(`AI 測驗生成成功！共生成了 ${generatedQuestions.length} 題問題。`);
+      }
+
+      setAiModalOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      alert('AI 出題失敗：' + (err.message || err));
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Plain Text Paste Import
+  const handleTextImportQuiz = () => {
+    if (!rawImportText.trim()) {
+      alert('請先貼上您要匯入的題目純文字內容！');
+      return;
+    }
+
+    try {
+      const importedQuestions = parsePlainTextQuiz(rawImportText);
+      if (importedQuestions.length === 0) {
+        alert('解析失敗：未偵測到任何符合格式的題目，請檢查格式是否符合範例說明。');
+        return;
+      }
+
+      const isDefaultTemplate = quiz && quiz.questions.length === 1 && quiz.questions[0].id === 'q-1';
+
+      if (quiz && quiz.questions.length > 0 && !isDefaultTemplate) {
+        // Append mode
+        const updatedQuiz = {
+          ...quiz,
+          questions: [...quiz.questions, ...importedQuestions]
+        };
+        const content = currentFormat === 'json' ? serializeJSON(updatedQuiz) : serializeTOML(updatedQuiz);
+        updateNote(note.id, { content });
+        alert(`成功匯入並追加了 ${importedQuestions.length} 題問題！`);
+      } else {
+        // Initialize or Overwrite default template mode
+        const newQuiz: Quiz = {
+          title: note.title || '文字匯入測驗',
+          description: '透過純文字貼上匯入的選擇題測驗。',
+          questions: importedQuestions
+        };
+        const content = serializeJSON(newQuiz);
+        updateNote(note.id, { content });
+        setTab('play');
+        setQuizStarted(false);
+        setQuizFinished(false);
+        setCurrentIdx(0);
+        alert(`成功初始化並匯入 ${importedQuestions.length} 題問題！`);
+      }
+
+      setRawImportText('');
+      setTextImportModalOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      alert('解析匯入時發生錯誤：' + (err.message || err));
+    }
   };
 
   // Play Actions
@@ -627,21 +893,37 @@ export const QuizView: React.FC<QuizViewProps> = ({ note, readOnly = false }) =>
     updateNote(note.id, { content });
   };
 
-  // Main Quiz Title / Desc updates
-  const handleMetaUpdate = (updates: Partial<Omit<Quiz, 'questions'>>) => {
-    if (!quiz) return;
-    const updatedQuiz = { ...quiz, ...updates };
-    
-    // Also sync note title
-    if (updates.title) {
-      updateNote(note.id, { title: updates.title });
-    }
-
-    const content = currentFormat === 'json' ? serializeJSON(updatedQuiz) : serializeTOML(updatedQuiz);
-    updateNote(note.id, { content });
+  // Main Quiz Title / Desc updates (debounced)
+  const handleChangeTitle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setLocalTitle(val);
+    triggerMetaSave();
   };
 
-  if (!quiz) {
+  const handleChangeDescription = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setLocalDescription(val);
+    triggerMetaSave();
+  };
+
+  const triggerMetaSave = () => {
+    if (metaDebounceRef.current) {
+      clearTimeout(metaDebounceRef.current);
+    }
+    metaDebounceRef.current = setTimeout(() => {
+      saveMetaForcefully();
+    }, 500);
+  };
+
+  const handleBlurMeta = () => {
+    if (metaDebounceRef.current) {
+      clearTimeout(metaDebounceRef.current);
+    }
+    saveMetaForcefully();
+  };
+
+  // ponytail: show the initialization screen if the quiz has no questions.
+  if (!quiz || !quiz.questions || quiz.questions.length === 0) {
     return (
       <div style={{
         display: 'flex',
@@ -1189,11 +1471,24 @@ export const QuizView: React.FC<QuizViewProps> = ({ note, readOnly = false }) =>
               <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-primary)' }}>測驗基本說明</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={labelStyle}>測驗標題</label>
-                <input type="text" value={quiz.title} onChange={(e) => handleMetaUpdate({ title: e.target.value })} style={inputStyle} placeholder="請輸入測驗標題..." />
+                <input 
+                  type="text" 
+                  value={localTitle} 
+                  onChange={handleChangeTitle} 
+                  onBlur={handleBlurMeta}
+                  style={inputStyle} 
+                  placeholder="請輸入測驗標題..." 
+                />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={labelStyle}>測驗描述</label>
-                <textarea value={quiz.description} onChange={(e) => handleMetaUpdate({ description: e.target.value })} style={{ ...inputStyle, height: '60px', resize: 'vertical' }} placeholder="請輸入測驗描述..." />
+                <textarea 
+                  value={localDescription} 
+                  onChange={handleChangeDescription} 
+                  onBlur={handleBlurMeta}
+                  style={{ ...inputStyle, height: '60px', resize: 'vertical' }} 
+                  placeholder="請輸入測驗描述..." 
+                />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
                 <span style={labelStyle}>預設下載格式：</span>
@@ -1208,10 +1503,20 @@ export const QuizView: React.FC<QuizViewProps> = ({ note, readOnly = false }) =>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>問題列表 (共 {quiz.questions.length} 題)</span>
-                <button onClick={() => openQuestionModal(null)} style={{ padding: '6px 12px', background: 'var(--brand-primary)', color: '#ffffff', borderRadius: 'var(--radius-sm)', fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Plus size={12} />
-                  <span>新增題目</span>
-                </button>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button onClick={() => openQuestionModal(null)} style={{ padding: '5px 10px', background: 'var(--brand-primary)', color: '#ffffff', borderRadius: 'var(--radius-sm)', fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', border: 'none' }}>
+                    <Plus size={11} />
+                    <span>新增題目</span>
+                  </button>
+                  <button onClick={() => setAiModalOpen(true)} style={{ padding: '5px 10px', background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', color: '#ffffff', borderRadius: 'var(--radius-sm)', fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', border: 'none' }}>
+                    <Sparkles size={11} />
+                    <span>AI 增題</span>
+                  </button>
+                  <button onClick={() => setTextImportModalOpen(true)} style={{ padding: '5px 10px', background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: 'var(--radius-sm)', fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                    <FileText size={11} />
+                    <span>文字增題</span>
+                  </button>
+                </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1407,6 +1712,358 @@ export const QuizView: React.FC<QuizViewProps> = ({ note, readOnly = false }) =>
                 }}
               >
                 儲存題目
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= AI GENERATION MODAL ================= */}
+      {aiModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(9, 11, 16, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px',
+          animation: 'fadeIn 0.2s ease'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%',
+            maxWidth: '560px',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            maxHeight: '90vh'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid var(--border-color)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'rgba(255,255,255,0.01)'
+            }}>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Sparkles size={16} style={{ color: 'var(--brand-primary)' }} />
+                <span>🤖 AI 智慧出題輔助</span>
+              </span>
+              <button 
+                onClick={() => !aiLoading && setAiModalOpen(false)} 
+                disabled={aiLoading}
+                style={{ color: 'var(--text-muted)', cursor: aiLoading ? 'default' : 'pointer', border: 'none', background: 'transparent' }}
+                onMouseEnter={(e)=>!aiLoading && (e.currentTarget.style.color='var(--text-primary)')}
+                onMouseLeave={(e)=>!aiLoading && (e.currentTarget.style.color='var(--text-muted)')}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              {/* API Key setting */}
+              <div className="glass-panel" style={{ padding: '12px 14px', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '10px', background: 'rgba(255,255,255,0.01)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={labelStyle}>OpenRouter API 設定</label>
+                  <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" style={{ fontSize: '10px', color: 'var(--brand-primary)', textDecoration: 'none' }}>獲取金鑰 ↗</a>
+                </div>
+                <input
+                  type="password"
+                  value={aiApiKey}
+                  onChange={(e) => setAiApiKey(e.target.value)}
+                  placeholder="請貼上您的 OpenRouter API 金鑰 (sk-or-...)"
+                  style={inputStyle}
+                  disabled={aiLoading}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ ...labelStyle, whiteSpace: 'nowrap' }}>選擇模型：</span>
+                  <select
+                    value={aiModel}
+                    onChange={(e) => setAiModel(e.target.value)}
+                    style={{ ...inputStyle, padding: '4px 8px', fontSize: '12px' }}
+                    disabled={aiLoading}
+                  >
+                    <option value="google/gemini-2.5-flash">Gemini 2.5 Flash (極低成本/推薦)</option>
+                    <option value="meta-llama/llama-3-8b-instruct:free">Llama 3 8B (免費)</option>
+                    <option value="google/gemma-2-9b-it:free">Gemma 2 9B (免費)</option>
+                    <option value="qwen/qwen-2-7b-instruct:free">Qwen 2 7B (免費)</option>
+                    <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (免費)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Quiz Generation Settings */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <label style={labelStyle}>出題來源方式</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="ai-source-type"
+                      checked={aiSource === 'topic'}
+                      onChange={() => setAiSource('topic')}
+                      disabled={aiLoading}
+                      style={{ accentColor: 'var(--brand-primary)' }}
+                    />
+                    <span>根據主題/關鍵字</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="ai-source-type"
+                      checked={aiSource === 'note'}
+                      onChange={() => setAiSource('note')}
+                      disabled={aiLoading}
+                      style={{ accentColor: 'var(--brand-primary)' }}
+                    />
+                    <span>讀取我的筆記內容</span>
+                  </label>
+                </div>
+
+                {aiSource === 'topic' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={labelStyle}>出題主題或關鍵字</label>
+                    <input
+                      type="text"
+                      value={aiTopic}
+                      onChange={(e) => setAiTopic(e.target.value)}
+                      placeholder="例如：JavaScript 閉包 (Closure)、線性代數矩陣運算"
+                      style={inputStyle}
+                      disabled={aiLoading}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={labelStyle}>選擇出題筆記</label>
+                    {(() => {
+                      const userNotes = notes.filter(n => (n.type === 'note' || !n.type) && !n.isTrash);
+                      return userNotes.length > 0 ? (
+                        <select
+                          value={aiSelectedNoteId}
+                          onChange={(e) => setAiSelectedNoteId(e.target.value)}
+                          style={inputStyle}
+                          disabled={aiLoading}
+                        >
+                          <option value="">-- 請選擇一項筆記 --</option>
+                          {userNotes.map(n => (
+                            <option key={n.id} value={n.id}>{n.title || '未命名頁面'}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '6px 0' }}>
+                          目前尚無任何筆記可供選擇，請先在左側建立一般筆記。
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ ...labelStyle, whiteSpace: 'nowrap' }}>出題題數：</label>
+                  <select
+                    value={aiNumQuestions}
+                    onChange={(e) => setAiNumQuestions(Number(e.target.value))}
+                    style={{ ...inputStyle, width: '80px', padding: '4px 8px' }}
+                    disabled={aiLoading}
+                  >
+                    <option value={3}>3 題</option>
+                    <option value={5}>5 題</option>
+                    <option value={10}>10 題</option>
+                  </select>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '16px 20px',
+              borderTop: '1px solid var(--border-color)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '10px',
+              background: 'rgba(255,255,255,0.01)'
+            }}>
+              <button
+                onClick={() => setAiModalOpen(false)}
+                disabled={aiLoading}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-color)',
+                  fontSize: '12.5px',
+                  color: 'var(--text-primary)',
+                  background: 'transparent',
+                  cursor: aiLoading ? 'default' : 'pointer'
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleAiGenerateQuiz}
+                disabled={aiLoading}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--brand-primary)',
+                  fontSize: '12.5px',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  cursor: aiLoading ? 'default' : 'pointer',
+                  opacity: aiLoading ? 0.7 : 1,
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {aiLoading ? (
+                  <>
+                    <RefreshCw size={13} className="spin" />
+                    <span>AI 出題中...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={13} />
+                    <span>開始 AI 出題</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= PLAIN TEXT IMPORT MODAL ================= */}
+      {textImportModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(9, 11, 16, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px',
+          animation: 'fadeIn 0.2s ease'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%',
+            maxWidth: '560px',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            maxHeight: '90vh'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid var(--border-color)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'rgba(255,255,255,0.01)'
+            }}>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FileText size={16} style={{ color: 'var(--brand-primary)' }} />
+                <span>📝 純文字題目貼上匯入</span>
+              </span>
+              <button 
+                onClick={() => setTextImportModalOpen(false)} 
+                style={{ color: 'var(--text-muted)', cursor: 'pointer', border: 'none', background: 'transparent' }}
+                onMouseEnter={(e)=>(e.currentTarget.style.color='var(--text-primary)')}
+                onMouseLeave={(e)=>(e.currentTarget.style.color='var(--text-muted)')}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={labelStyle}>貼上題目文字</label>
+                <textarea
+                  value={rawImportText}
+                  onChange={(e) => setRawImportText(e.target.value)}
+                  placeholder="請貼上符合規範的題目純文字..."
+                  style={{ ...inputStyle, height: '180px', fontFamily: 'monospace', resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Format description */}
+              <div className="glass-panel" style={{ padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>💡 支援的文字格式範例（題目間請空一行）：</div>
+                <pre style={{ margin: 0, fontSize: '10.5px', color: 'var(--text-muted)', lineHeight: '1.5', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+{`1. 哪一個程式語言主要用於網頁前端開發？
+A. Python
+B. Java
+C. JavaScript
+D. C++
+答案：C
+解析：JavaScript 可以在瀏覽器中直接運行，是網頁前端的核心語言。
+
+2. 請問 2 + 2 等於多少？
+A) 3
+B) 4
+答案：B`}
+                </pre>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '16px 20px',
+              borderTop: '1px solid var(--border-color)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '10px',
+              background: 'rgba(255,255,255,0.01)'
+            }}>
+              <button
+                onClick={() => setTextImportModalOpen(false)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-color)',
+                  fontSize: '12.5px',
+                  color: 'var(--text-primary)',
+                  background: 'transparent',
+                  cursor: 'pointer'
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleTextImportQuiz}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--brand-primary)',
+                  fontSize: '12.5px',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  border: 'none'
+                }}
+              >
+                解析並匯入
               </button>
             </div>
           </div>

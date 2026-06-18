@@ -670,9 +670,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setAuthModalOpen(true);
       return;
     }
-    await db.toggleLike(noteId, currentUser.id);
-    if (!isFirebaseConfigured) {
-      refreshData();
+    try {
+      await db.toggleLike(noteId, currentUser.id);
+      if (!isFirebaseConfigured) {
+        refreshData();
+      }
+    } catch (err: any) {
+      console.error("按讚失敗:", err);
+      alert("按讚失敗，原因可能為 Firebase 安全性規則尚未部署或權限不足：" + err.message);
     }
   };
 

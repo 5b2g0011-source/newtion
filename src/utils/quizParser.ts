@@ -194,3 +194,69 @@ export function serializeTOML(quiz: Quiz): string {
 export function serializeJSON(quiz: Quiz): string {
   return JSON.stringify(quiz, null, 2);
 }
+
+/**
+ * Parses raw plain text into standard structured Questions.
+ * Supports standard A/B/C/D option prefixes, answer matching, and explanation matching.
+ */
+export function parsePlainTextQuiz(text: string): Question[] {
+  const questions: Question[] = [];
+  // Split by double newline or dashed lines or question boundaries
+  const blocks = text.split(/\n\s*\n/);
+  
+  for (const block of blocks) {
+    const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length < 3) continue; // Must have at least a question and 2 options
+    
+    let questionText = '';
+    const options: string[] = [];
+    let answerIdx = 0;
+    let explanation = '';
+    
+    // First line is the question text
+    questionText = lines[0].replace(/^\d+[\s\.\、\：\:]*/i, '').trim();
+    
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      // Check if it's an option (starts with A-F, a-f, or digits followed by separator)
+      const optMatch = line.match(/^([A-Fa-f0-9])[\.\、\:\)\s]+(.*)/);
+      if (optMatch) {
+        options.push(optMatch[2].trim());
+      } else if (line.match(/^(答案|正解|Answer|Key)[\：\:\s]*([A-Fa-f0-9])/i)) {
+        const ansMatch = line.match(/^(答案|正解|Answer|Key)[\：\:\s]*([A-Fa-f0-9])/i);
+        if (ansMatch) {
+          const ansChar = ansMatch[2].toUpperCase();
+          if (ansChar >= 'A' && ansChar <= 'F') {
+            answerIdx = ansChar.charCodeAt(0) - 65; // A=0, B=1, ...
+          } else {
+            const ansNum = parseInt(ansChar, 10);
+            answerIdx = isNaN(ansNum) ? 0 : ansNum - 1; // 1-indexed to 0-indexed
+          }
+        }
+      } else if (line.match(/^(解析|說明|Explanation|Detail)[\：\:\s]*(.*)/i)) {
+        const expMatch = line.match(/^(解析|說明|Explanation|Detail)[\：\:\s]*(.*)/i);
+        if (expMatch) {
+          explanation = expMatch[2].trim();
+        }
+      } else {
+        if (options.length === 0) {
+          questionText += '\n' + line;
+        } else {
+          explanation += (explanation ? '\n' : '') + line;
+        }
+      }
+    }
+    
+    if (questionText && options.length >= 2) {
+      questions.push({
+        id: `q-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        question: questionText,
+        options,
+        answer: answerIdx,
+        explanation
+      });
+    }
+  }
+  
+  return questions;
+}

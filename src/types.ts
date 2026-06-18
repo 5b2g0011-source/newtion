@@ -61,7 +61,7 @@ export interface GraphNode {
   width: number;
   height: number;
   color: string;
-  shape: 'rect' | 'rounded-rect' | 'circle' | 'ellipse' | 'diamond' | 'triangle' | 'hexagon' | 'parallelogram' | 'cylinder';
+  shape: 'rect' | 'rounded-rect' | 'circle' | 'ellipse' | 'diamond' | 'triangle' | 'hexagon' | 'parallelogram' | 'cylinder' | 'star' | 'cloud' | 'document' | 'capsule';
   fontSize?: number;
 }
 
