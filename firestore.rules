@@ -13,16 +13,18 @@ service cloud.firestore {
 
     // --- NOTES COLLECTION ---
     // Owner can read/write their own notes.
-    // Public published notes can be read by anyone.
+    // Published notes can be fetched by direct link (get). Only public notes can be listed in queries.
     match /notes/{noteId} {
-      allow read: if (resource.data.isPublished == true && resource.data.isPublic == true) || 
+      allow get: if resource.data.isPublished == true || 
+                   (request.auth != null && resource.data.userId == request.auth.uid);
+      allow list: if (resource.data.isPublished == true && resource.data.isPublic == true) || 
                    (request.auth != null && resource.data.userId == request.auth.uid);
                    
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
       
       allow update: if request.auth != null && (
                     (resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid) ||
-                    (resource.data.isPublished == true && resource.data.isPublic == true && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']))
+                    (resource.data.isPublished == true && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']))
                   );
                     
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
