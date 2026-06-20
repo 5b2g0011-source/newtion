@@ -2,6 +2,7 @@ import type { User, Note, Comment, Message } from './types';
 import { db as firestore, auth, googleProvider, isFirebaseConfigured } from './firebase';
 import { 
   signInWithPopup, 
+  signInWithRedirect,
   signOut 
 } from 'firebase/auth';
 import { 
@@ -112,6 +113,23 @@ localDB.init();
 // -------------------------------------------------------------
 // HYBRID DB API
 // -------------------------------------------------------------
+// Helper to handle and display user-friendly Firebase Auth errors
+export const handleAuthError = (err: any) => {
+  const code = err?.code;
+  const domain = window.location.hostname;
+  if (code === 'auth/unauthorized-domain') {
+    alert(`此網域尚未在 Firebase Console 啟用授權！\n請前往 Firebase Console -> Authentication -> 設定 (Settings) -> 授權網域 (Authorized domains) 中新增此網域：\n${domain}`);
+  } else if (code === 'auth/operation-not-allowed') {
+    alert('Google 登入服務尚未啟用！\n請前往 Firebase Console -> Authentication -> 登入方法 (Sign-in method) 中啟用 Google 登入。');
+  } else if (code === 'auth/popup-closed-by-user') {
+    console.warn('Google login popup closed by user.');
+  } else if (code === 'auth/popup-blocked') {
+    alert('登入視窗被瀏覽器封鎖！請在瀏覽器設定中允許此網站開啟彈出式視窗，或使用 Safari/Chrome 等標準瀏覽器開啟。');
+  } else {
+    alert(`Google 登入失敗：\n[${code || 'Error'}] ${err?.message || err}`);
+  }
+};
+
 export const db = {
   isCloud: isFirebaseConfigured,
 
@@ -123,6 +141,22 @@ export const db = {
       const teamUser = localDB.getUsers().find(u => u.username === 'newtion_team') || null;
       if (teamUser) localStorage.setItem('newtion_current_user', JSON.stringify(teamUser));
       return teamUser;
+    }
+
+    // Detect mobile or in-app browser (e.g. LINE, FB, Instagram, WeChat, etc.)
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isInApp = /FBAV|Instagram|LINE|mobi/i.test(navigator.userAgent);
+
+    // ponytail: Mobile/In-app browsers don't support popups well, use redirect instead.
+    if (isMobile || isInApp) {
+      try {
+        await signInWithRedirect(auth, googleProvider);
+        return null; // Page redirects
+      } catch (err: any) {
+        console.error('Google login with redirect failed:', err);
+        handleAuthError(err);
+        return null;
+      }
     }
 
     try {
@@ -149,8 +183,19 @@ export const db = {
       }
       
       return finalUser;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Google login failed:', err);
+      // Fallback to redirect if popup is blocked
+      if (err.code === 'auth/popup-blocked') {
+        try {
+          alert('偵測到瀏覽器封鎖了彈出式視窗，將自動切換為重新導向 (Redirect) 方式登入。');
+          await signInWithRedirect(auth, googleProvider);
+        } catch (redirectErr: any) {
+          handleAuthError(redirectErr);
+        }
+      } else {
+        handleAuthError(err);
+      }
       return null;
     }
   },

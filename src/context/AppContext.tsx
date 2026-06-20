@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User, Note, Comment, ClickLogItem, Message } from '../types';
-import { db } from '../db';
+import { db, handleAuthError } from '../db';
 import { isFirebaseConfigured, auth, db as firestore } from '../firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, doc, query, where, updateDoc, deleteField } from 'firebase/firestore';
+import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
+import { collection, onSnapshot, doc, query, where, updateDoc, deleteField, getDoc, setDoc } from 'firebase/firestore';
 
 interface AppContextType {
   currentUser: User | null;
@@ -246,6 +246,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let unsubMessages: (() => void) | null = null;
       let unsubUserDoc: (() => void) | null = null;
 
+      // Handle redirect result (for mobile/in-app browsers after redirecting back)
+      getRedirectResult(auth)
+        .then(async (result) => {
+          if (result?.user) {
+            const user = result.user;
+            const userDocRef = doc(firestore, 'users', user.uid);
+            const userSnap = await getDoc(userDocRef);
+            if (!userSnap.exists()) {
+              const newUser: User = {
+                id: user.uid,
+                username: user.email?.split('@')[0] || user.uid,
+                displayName: user.displayName || 'Google 用戶',
+                avatarUrl: user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80',
+                createdAt: new Date().toISOString()
+              };
+              await setDoc(userDocRef, newUser);
+            }
+          }
+        })
+        .catch((err) => {
+          console.error('Redirect sign-in error:', err);
+          handleAuthError(err);
+        });
+
       // 1. Auth subscription
       const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
         // Unsubscribe from previous user notes subscription if any
@@ -264,6 +288,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (firebaseUser) {
           const userDocRef = doc(firestore, 'users', firebaseUser.uid);
+          
+          // Verify and create user document if not exists
+          getDoc(userDocRef).then(async (snap) => {
+            if (!snap.exists()) {
+              const newUser: User = {
+                id: firebaseUser.uid,
+                username: firebaseUser.email?.split('@')[0] || firebaseUser.uid,
+                displayName: firebaseUser.displayName || 'Google 用戶',
+                avatarUrl: firebaseUser.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80',
+                createdAt: new Date().toISOString()
+              };
+              await setDoc(userDocRef, newUser);
+            }
+          }).catch(err => {
+            console.error("Error auto-creating user document:", err);
+          });
+
           unsubUserDoc = onSnapshot(userDocRef, (snap) => {
             if (snap.exists()) {
               setCurrentUser(snap.data() as User);
