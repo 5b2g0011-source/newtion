@@ -2,9 +2,15 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
+const isLocalhost = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  // ponytail: Use window.location.hostname in production to proxy through Vercel and prevent cross-origin cookie block.
+  authDomain: isLocalhost 
+    ? import.meta.env.VITE_FIREBASE_AUTH_DOMAIN 
+    : (typeof window !== 'undefined' ? window.location.hostname : import.meta.env.VITE_FIREBASE_AUTH_DOMAIN),
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
