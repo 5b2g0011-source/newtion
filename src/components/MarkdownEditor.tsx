@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { CoverPicker } from './CoverPicker';
 import { EmojiPicker } from './EmojiPicker';
-import { MarkdownPreview } from './MarkdownPreview';
+import { MarkdownPreview, renderMath } from './MarkdownPreview';
+import { marked } from 'marked';
 import { TableOfContents } from './TableOfContents';
 import { 
   Bold, Italic, Code, Quote, Link as LinkIcon, List, Table,
@@ -11,6 +12,9 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { uploadImage } from '../utils/upload';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from 'firebase/firestore';
+import { db as firestore, isFirebaseConfigured } from '../firebase';
+import type { Presence } from '../types';
 
 interface NoteTemplate {
   name: string;
@@ -58,12 +62,177 @@ const NOTE_TEMPLATES: NoteTemplate[] = [
   }
 ];
 
+const convertHtmlToMarkdown = (html: string): string => {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  
+  const scripts = tempDiv.getElementsByTagName('script');
+  while (scripts.length > 0) scripts[0].parentNode?.removeChild(scripts[0]);
+  const styles = tempDiv.getElementsByTagName('style');
+  while (styles.length > 0) styles[0].parentNode?.removeChild(styles[0]);
+
+  let markdown = '';
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      markdown += node.nodeValue;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      const tag = el.tagName.toLowerCase();
+      
+      if (tag === 'h1') markdown += '\n\n# ';
+      else if (tag === 'h2') markdown += '\n\n## ';
+      else if (tag === 'h3') markdown += '\n\n### ';
+      else if (tag === 'h4') markdown += '\n\n#### ';
+      else if (tag === 'p') markdown += '\n\n';
+      else if (tag === 'br') markdown += '\n';
+      else if (tag === 'strong' || tag === 'b') markdown += '**';
+      else if (tag === 'em' || tag === 'i') markdown += '*';
+      else if (tag === 'code') markdown += '`';
+      else if (tag === 'li') markdown += '\n* ';
+      else if (tag === 'blockquote') markdown += '\n\n> ';
+
+      for (let i = 0; i < el.childNodes.length; i++) {
+        walk(el.childNodes[i]);
+      }
+
+      if (tag === 'strong' || tag === 'b') markdown += '**';
+      else if (tag === 'em' || tag === 'i') markdown += '*';
+      else if (tag === 'code') markdown += '`';
+    }
+  };
+
+  walk(tempDiv);
+  return markdown.replace(/\n{3,}/g, '\n\n').trim();
+};
+
+const parseDocxFile = async (file: File): Promise<string> => {
+  return new Promise<string>(async (resolve, reject) => {
+    try {
+      const loadMammoth = () => {
+        return new Promise<any>((res, rej) => {
+          if ((window as any).mammoth) {
+            res((window as any).mammoth);
+            return;
+          }
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js';
+          script.onload = () => res((window as any).mammoth);
+          script.onerror = () => rej(new Error('無法從 CDN 載入 Mammoth 解析庫'));
+          document.head.appendChild(script);
+        });
+      };
+      
+      const mammoth = await loadMammoth();
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const arrayBuffer = event.target?.result as ArrayBuffer;
+          const result = await mammoth.convertToMarkdown({ arrayBuffer });
+          resolve(result.value);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = () => reject(new Error('讀取檔案時出錯'));
+      reader.readAsArrayBuffer(file);
+    } catch (err) {
+      reject(err);
+    }
+  });
+};
+
+const parsePdfFile = async (file: File): Promise<string> => {
+  return new Promise<string>(async (resolve, reject) => {
+    try {
+      const loadPdfJs = () => {
+        return new Promise<any>((res, rej) => {
+          if ((window as any).pdfjsLib) {
+            res((window as any).pdfjsLib);
+            return;
+          }
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          script.onload = () => {
+            const pdfjsLib = (window as any).pdfjsLib;
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            res(pdfjsLib);
+          };
+          script.onerror = () => rej(new Error('無法從 CDN 載入 PDF.js 解析庫'));
+          document.head.appendChild(script);
+        });
+      };
+
+      const pdfjsLib = await loadPdfJs();
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const arrayBuffer = event.target?.result as ArrayBuffer;
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          let text = '';
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            const pageText = content.items.map((item: any) => item.str).join(' ');
+            text += `## Page ${i}\n\n${pageText}\n\n`;
+          }
+          resolve(text);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = () => reject(new Error('讀取檔案時出錯'));
+      reader.readAsArrayBuffer(file);
+    } catch (err) {
+      reject(err);
+    }
+  });
+};
+
+const CURSOR_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#14b8a6'];
+const getUserColor = (userId: string) => {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % CURSOR_COLORS.length;
+  return CURSOR_COLORS[index];
+};
+
+const getCaretCoordinates = (element: HTMLTextAreaElement, position: number) => {
+  const div = document.createElement('div');
+  const style = window.getComputedStyle(element);
+  for (const prop of style) {
+    div.style[prop as any] = style[prop as any];
+  }
+  div.style.position = 'absolute';
+  div.style.visibility = 'hidden';
+  div.style.whiteSpace = 'pre-wrap';
+  div.style.wordWrap = 'break-word';
+  
+  const text = element.value;
+  div.textContent = text.substring(0, position);
+  
+  const span = document.createElement('span');
+  span.textContent = text.substring(position) || '.';
+  div.appendChild(span);
+  
+  document.body.appendChild(div);
+  const spanLeft = span.offsetLeft;
+  const spanTop = span.offsetTop;
+  document.body.removeChild(div);
+  
+  return {
+    top: spanTop - element.scrollTop + 24, // adjust for padding-top 24px of textarea
+    left: spanLeft - element.scrollLeft + 24 // adjust for padding-left 24px of textarea
+  };
+};
+
 interface MarkdownEditorProps {
   noteId: string;
 }
 
 export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
-  const { notes, updateNote, users, currentUser, sendMessage } = useApp();
+  const { notes, updateNote, createNote, users, currentUser, sendMessage } = useApp();
   const note = notes.find(n => n.id === noteId);
 
   const [viewMode, setViewMode] = useState<'edit' | 'split' | 'view'>('split');
@@ -71,10 +240,89 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
   const [showShareDropdown, setShowShareDropdown] = useState(false);
   const [selectedUserForShare, setSelectedUserForShare] = useState('');
   const [isSendingNote, setIsSendingNote] = useState(false);
+  const [isDragOverFile, setIsDragOverFile] = useState(false);
   const [showDownloadDropdown, setShowDownloadDropdown] = useState(false);
   const [isSaved, setIsSaved] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [bypassTemplates, setBypassTemplates] = useState(false);
+  const [presences, setPresences] = useState<Presence[]>([]);
+  const [scrollTrigger, setScrollTrigger] = useState(0);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sync own presence & listen to other presences on this note
+  useEffect(() => {
+    if (!isFirebaseConfigured || !currentUser) return;
+    
+    const presenceId = `${noteId}_${currentUser.id}`;
+    const docRef = doc(firestore, 'note_presence', presenceId);
+    const color = getUserColor(currentUser.id);
+    
+    const updateOwnPresence = async (cursorIdx?: number) => {
+      try {
+        await setDoc(docRef, {
+          id: presenceId,
+          noteId,
+          userId: currentUser.id,
+          userName: currentUser.displayName || currentUser.username,
+          avatarUrl: currentUser.avatarUrl,
+          cursorIndex: cursorIdx !== undefined ? cursorIdx : null,
+          lastActive: Date.now(),
+          color
+        });
+      } catch (err) {
+        console.error('Update presence failed:', err);
+      }
+    };
+
+    updateOwnPresence(textareaRef.current?.selectionStart);
+    
+    const presenceInterval = setInterval(() => {
+      updateOwnPresence(textareaRef.current?.selectionStart);
+    }, 10000);
+    
+    const q = query(
+      collection(firestore, 'note_presence'),
+      where('noteId', '==', noteId)
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const now = Date.now();
+      const activePresences: Presence[] = [];
+      snapshot.forEach((snapDoc) => {
+        const p = snapDoc.data() as Presence;
+        if (p.userId !== currentUser.id && (now - p.lastActive < 30000)) {
+          activePresences.push(p);
+        }
+      });
+      setPresences(activePresences);
+    });
+    
+    return () => {
+      clearInterval(presenceInterval);
+      unsubscribe();
+      deleteDoc(docRef).catch(err => console.error('Delete presence failed:', err));
+    };
+  }, [noteId, currentUser]);
+
+  const handleEditorCursorSelect = () => {
+    if (!isFirebaseConfigured || !currentUser) return;
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    
+    const presenceId = `${noteId}_${currentUser.id}`;
+    const docRef = doc(firestore, 'note_presence', presenceId);
+    setDoc(docRef, {
+      id: presenceId,
+      noteId,
+      userId: currentUser.id,
+      userName: currentUser.displayName || currentUser.username,
+      avatarUrl: currentUser.avatarUrl,
+      cursorIndex: textarea.selectionStart,
+      lastActive: Date.now(),
+      color: getUserColor(currentUser.id)
+    }, { merge: true }).catch(err => console.error('Update cursor position failed:', err));
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -172,7 +420,6 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
   }, [isDragging]);
 
   // Sync scroll refs
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const activeScrollRef = useRef<'editor' | 'preview' | null>(null);
 
@@ -219,6 +466,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
 
   // --- Scroll Sync Handlers ---
   const handleEditorScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    setScrollTrigger(prev => prev + 1);
     if (activeScrollRef.current !== 'editor' || viewMode !== 'split') return;
     const editor = e.currentTarget;
     const preview = previewRef.current;
@@ -342,9 +590,166 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
     }
   };
 
-  const handleDownload = (format: 'md' | 'txt') => {
+  const generateStyledHtml = (): string => {
+    let rawHtml = '';
+    try {
+      const mathRenderedContent = renderMath(note.content || '');
+      rawHtml = marked.parse(mathRenderedContent) as string;
+      
+      const ALERT_MAP: Record<string, { title: string; icon: string }> = {
+        NOTE: { title: '提醒', icon: '💡' },
+        TIP: { title: '提示', icon: '⚡' },
+        IMPORTANT: { title: '重要', icon: '🔔' },
+        WARNING: { title: '警告', icon: '⚠️' }
+      };
+      const alertRegex = /<blockquote>\s*<p>\s*\[!(NOTE|TIP|IMPORTANT|WARNING)\]\s*(?:<br\s*\/?>)?([\s\S]*?)<\/p>\s*<\/blockquote>/gi;
+      rawHtml = rawHtml.replace(alertRegex, (_, type, innerText) => {
+        const uType = type.toUpperCase();
+        const alertConfig = ALERT_MAP[uType] || { title: uType, icon: '💡' };
+        return `
+          <div class="markdown-alert markdown-alert-${uType.toLowerCase()}" style="padding: 12px 16px; margin: 16px 0; border-left: 4px solid; border-radius: 4px; ${
+            uType === 'NOTE' ? 'background-color: #f1f8ff; border-left-color: #0366d6;' :
+            uType === 'TIP' ? 'background-color: #f0fdf4; border-left-color: #22c55e;' :
+            uType === 'IMPORTANT' ? 'background-color: #fffbeb; border-left-color: #d97706;' :
+            'background-color: #fef2f2; border-left-color: #ef4444;'
+          }">
+            <div class="alert-title" style="display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 4px;">
+              <span>${alertConfig.icon}</span>
+              <span>${alertConfig.title}</span>
+            </div>
+            <p style="margin: 0;">${innerText.trim()}</p>
+          </div>
+        `;
+      });
+    } catch (err) {
+      console.error('HTML generation failed:', err);
+      rawHtml = `<pre>${note.content}</pre>`;
+    }
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${note.title || 'untitled'}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 20px;
+      color: #333;
+      background-color: #fff;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      color: #111;
+      margin-top: 24px;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+    h1 { border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+    a { color: #0366d6; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 85%;
+      background-color: rgba(27,31,35,0.05);
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+    }
+    pre code {
+      background-color: transparent;
+      padding: 0;
+    }
+    blockquote {
+      border-left: 0.25em solid #dfe2e5;
+      color: #6a737d;
+      padding: 0 1em;
+      margin: 0;
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 16px 0;
+    }
+    th, td {
+      border: 1px solid #dfe2e5;
+      padding: 6px 13px;
+    }
+    tr:nth-child(even) {
+      background-color: #f6f8fa;
+    }
+  </style>
+</head>
+<body>
+  <h1>${note.title || 'Untitled'}</h1>
+  ${rawHtml}
+</body>
+</html>`;
+  };
+
+  const handleDownload = (format: 'md' | 'txt' | 'html' | 'pdf' | 'docx') => {
+    if (format === 'pdf') {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        const html = generateStyledHtml();
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      setShowDownloadDropdown(false);
+      return;
+    }
+
     const filename = `${note.title || 'untitled'}.${format}`;
-    const blob = new Blob([note.content], { type: 'text/plain;charset=utf-8' });
+    let fileContent = note.content;
+    let mimeType = 'text/plain;charset=utf-8';
+
+    if (format === 'html') {
+      fileContent = generateStyledHtml();
+      mimeType = 'text/html;charset=utf-8';
+    } else if (format === 'docx') {
+      const htmlContent = generateStyledHtml();
+      fileContent = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta charset="utf-8">
+          <title>${note.title || 'untitled'}</title>
+          <!--[if gte mso 9]>
+          <xml>
+            <w:WordDocument>
+              <w:View>Print</w:View>
+              <w:Zoom>100</w:Zoom>
+              <w:DoNotOptimizeForBrowser/>
+            </w:WordDocument>
+          </xml>
+          <![endif]-->
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+          </style>
+        </head>
+        <body>
+          ${htmlContent}
+        </body>
+        </html>
+      `;
+      mimeType = 'application/msword;charset=utf-8';
+    }
+
+    const blob = new Blob([fileContent], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -433,8 +838,90 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
     }
   };
 
+  const handleWorkspaceDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragOverFile(true);
+    }
+  };
+
+  const handleWorkspaceDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverFile(false);
+  };
+
+  const handleWorkspaceDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverFile(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      
+      const validExtensions = ['.md', '.txt', '.html', '.htm', '.docx', '.pdf'];
+      if (!validExtensions.includes(ext)) {
+        alert('不支援的檔案格式！僅支援 .md, .txt, .html, .docx, .pdf 格式。');
+        return;
+      }
+
+      const parsedTitle = file.name.substring(0, file.name.lastIndexOf('.'));
+      let parsedContent = '';
+
+      try {
+        if (ext === '.md' || ext === '.txt') {
+          parsedContent = await file.text();
+        } else if (ext === '.html' || ext === '.htm') {
+          const htmlText = await file.text();
+          parsedContent = convertHtmlToMarkdown(htmlText);
+        } else if (ext === '.docx') {
+          parsedContent = await parseDocxFile(file);
+        } else if (ext === '.pdf') {
+          parsedContent = await parsePdfFile(file);
+        }
+
+        const newNoteId = await createNote(null, 'note');
+        await updateNote(newNoteId, { title: parsedTitle, content: parsedContent });
+      } catch (err: any) {
+        console.error('檔案解析失敗:', err);
+        alert('檔案解析失敗: ' + err.message);
+      }
+    }
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div 
+      onDragOver={handleWorkspaceDragOver}
+      onDragLeave={handleWorkspaceDragLeave}
+      onDrop={handleWorkspaceDrop}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}
+    >
+      {isDragOverFile && (
+        <div style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.8)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 1000,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '16px',
+          border: '3px dashed var(--brand-primary)',
+          borderRadius: 'var(--radius-lg)',
+          margin: '12px',
+          color: '#ffffff',
+          pointerEvents: 'none'
+        }}>
+          <Sparkles size={48} style={{ color: 'var(--brand-primary)', animation: 'pulse 2s infinite' }} />
+          <span style={{ fontSize: '18px', fontWeight: 600 }}>放開以將檔案匯入為新筆記 📝</span>
+          <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.6)' }}>支援 .md, .txt, .html, .docx, .pdf 格式</span>
+        </div>
+      )}
       
       {/* 1. Header Banner & Cover Selector */}
       <div style={{
@@ -508,6 +995,45 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
 
           {/* Social Share & Publication controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
+            {/* Active Collaborative Users Avatars */}
+            {presences.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', marginRight: '8px', position: 'relative' }}>
+                <div style={{ display: 'flex', flexDirection: 'row-reverse' }}>
+                  {presences.map((p, idx) => (
+                    <img
+                      key={p.userId}
+                      src={p.avatarUrl}
+                      title={`${p.userName} 正在協同編輯`}
+                      alt={p.userName}
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '50%',
+                        border: `2px solid ${p.color}`,
+                        marginLeft: idx === 0 ? '0px' : '-8px',
+                        zIndex: 10 + idx,
+                        boxShadow: 'var(--shadow-sm)',
+                        transition: 'transform var(--transition-fast)'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+                      onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                    />
+                  ))}
+                </div>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: '#10b981',
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  border: '1.5px solid var(--bg-card)',
+                  zIndex: 20
+                }} />
+              </div>
+            )}
+
             <button
               onClick={() => setShowShareDropdown(!showShareDropdown)}
               style={{
@@ -729,7 +1255,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
         </div>
 
         {/* Tags Row */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
           <Tag size={13} style={{ color: 'var(--text-muted)' }} />
           {note.tags.map(tag => (
             <span
@@ -791,6 +1317,31 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
               }}
             />
           </form>
+
+          {/* Category Selector */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>分類：</span>
+            <select
+              value={note.category || ''}
+              onChange={(e) => updateNote(noteId, { category: e.target.value || undefined })}
+              style={{
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-primary)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '2px 8px',
+                fontSize: '11.5px',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="">未分類</option>
+              <option value="科技">科技</option>
+              <option value="教育">教育</option>
+              <option value="生活">生活</option>
+              <option value="筆記整理">筆記整理</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -913,6 +1464,51 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
                     下載為 .txt
+                  </button>
+                  <button
+                    onClick={() => handleDownload('html')}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '11.5px',
+                      textAlign: 'left',
+                      borderRadius: 'var(--radius-sm)',
+                      width: '100%',
+                      color: 'var(--text-primary)'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    匯出為 HTML
+                  </button>
+                  <button
+                    onClick={() => handleDownload('docx')}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '11.5px',
+                      textAlign: 'left',
+                      borderRadius: 'var(--radius-sm)',
+                      width: '100%',
+                      color: 'var(--text-primary)'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    匯出為 Word (.docx)
+                  </button>
+                  <button
+                    onClick={() => handleDownload('pdf')}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '11.5px',
+                      textAlign: 'left',
+                      borderRadius: 'var(--radius-sm)',
+                      width: '100%',
+                      color: 'var(--text-primary)'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    匯出為 PDF (列印)
                   </button>
                 </div>
               </>
@@ -1143,9 +1739,12 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
                   value={localContent}
                   onChange={handleChangeContent}
                   onScroll={handleEditorScroll}
+                  onSelect={handleEditorCursorSelect}
+                  onKeyUp={handleEditorCursorSelect}
                   onMouseEnter={() => activeScrollRef.current = 'editor'}
                   onMouseLeave={() => activeScrollRef.current = null}
                   onPaste={handlePaste}
+                  onDragOver={(e) => e.preventDefault()}
                   onDrop={handleDrop}
                   placeholder="# 開始編寫 Markdown..."
                   style={{
@@ -1162,6 +1761,61 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ noteId }) => {
                     color: 'var(--text-primary)'
                   }}
                 />
+
+                {/* Collaborative Cursors */}
+                {(() => {
+                  const textareaEl = textareaRef.current;
+                  if (!textareaEl || scrollTrigger < 0) return null;
+                  
+                  return presences.map(p => {
+                    if (p.cursorIndex === undefined || p.cursorIndex === null) return null;
+                    
+                    const cursorIndex = Math.min(p.cursorIndex, localContent.length);
+                    let coords = { top: 0, left: 0 };
+                    try {
+                      coords = getCaretCoordinates(textareaEl, cursorIndex);
+                    } catch (e) {
+                      return null;
+                    }
+
+                    const textareaHeight = textareaEl.clientHeight;
+                    if (coords.top < 0 || coords.top > textareaHeight) return null;
+
+                    return (
+                      <div
+                        key={p.userId}
+                        style={{
+                          position: 'absolute',
+                          top: `${coords.top}px`,
+                          left: `${coords.left}px`,
+                          width: '2px',
+                          height: '18px',
+                          backgroundColor: p.color,
+                          pointerEvents: 'none',
+                          zIndex: 5,
+                          transition: 'all 0.08s ease-out'
+                        }}
+                      >
+                        <div style={{
+                          position: 'absolute',
+                          top: '-16px',
+                          left: '2px',
+                          backgroundColor: p.color,
+                          color: '#fff',
+                          fontSize: '9px',
+                          fontWeight: 600,
+                          padding: '1px 4px',
+                          borderRadius: '3px',
+                          whiteSpace: 'nowrap',
+                          pointerEvents: 'none'
+                        }}
+                        >
+                          {p.userName}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             )}
 

@@ -530,5 +530,75 @@ export const db = {
         localStorage.setItem('newtion_messages', JSON.stringify(messages));
       }
     }
+  },
+
+  toggleFollowUser: async (userId: string, targetUserId: string): Promise<string[]> => {
+    if (isFirebaseConfigured) {
+      const userRef = doc(firestore, 'users', userId);
+      const snap = await getDoc(userRef);
+      if (snap.exists()) {
+        const userData = snap.data() as User;
+        const following = userData.following || [];
+        const newFollowing = following.includes(targetUserId)
+          ? following.filter(id => id !== targetUserId)
+          : [...following, targetUserId];
+        await updateDoc(userRef, { following: newFollowing });
+        return newFollowing;
+      }
+      return [];
+    } else {
+      const users = localDB.getUsers();
+      const idx = users.findIndex(u => u.id === userId);
+      if (idx !== -1) {
+        const following = users[idx].following || [];
+        const newFollowing = following.includes(targetUserId)
+          ? following.filter(id => id !== targetUserId)
+          : [...following, targetUserId];
+        users[idx] = { ...users[idx], following: newFollowing };
+        localStorage.setItem('newtion_users', JSON.stringify(users));
+        
+        const curr = localStorage.getItem('newtion_current_user');
+        if (curr && JSON.parse(curr).id === userId) {
+          localStorage.setItem('newtion_current_user', JSON.stringify(users[idx]));
+        }
+        return newFollowing;
+      }
+      return [];
+    }
+  },
+
+  toggleSubscribeTag: async (userId: string, tag: string): Promise<string[]> => {
+    if (isFirebaseConfigured) {
+      const userRef = doc(firestore, 'users', userId);
+      const snap = await getDoc(userRef);
+      if (snap.exists()) {
+        const userData = snap.data() as User;
+        const tags = userData.subscribedTags || [];
+        const newTags = tags.includes(tag)
+          ? tags.filter(t => t !== tag)
+          : [...tags, tag];
+        await updateDoc(userRef, { subscribedTags: newTags });
+        return newTags;
+      }
+      return [];
+    } else {
+      const users = localDB.getUsers();
+      const idx = users.findIndex(u => u.id === userId);
+      if (idx !== -1) {
+        const tags = users[idx].subscribedTags || [];
+        const newTags = tags.includes(tag)
+          ? tags.filter(t => t !== tag)
+          : [...tags, tag];
+        users[idx] = { ...users[idx], subscribedTags: newTags };
+        localStorage.setItem('newtion_users', JSON.stringify(users));
+        
+        const curr = localStorage.getItem('newtion_current_user');
+        if (curr && JSON.parse(curr).id === userId) {
+          localStorage.setItem('newtion_current_user', JSON.stringify(users[idx]));
+        }
+        return newTags;
+      }
+      return [];
+    }
   }
 };

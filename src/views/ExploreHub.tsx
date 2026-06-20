@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { Search, Heart, MessageSquare } from 'lucide-react';
+import { Search, Heart, MessageSquare, UserPlus, UserMinus, Bell, BellOff } from 'lucide-react';
 
 export const ExploreHub: React.FC = () => {
-  const { notes, users, navigateToView, comments } = useApp();
+  const { notes, users, currentUser, navigateToView, comments, toggleFollowUser, toggleSubscribeTag } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   // Get only notes that are published and public
   const publishedNotes = useMemo(() => {
@@ -19,7 +20,7 @@ export const ExploreHub: React.FC = () => {
     return Array.from(tagsSet);
   }, [publishedNotes]);
 
-  // Filter notes by search query and selected tag
+  // Filter notes by search query, selected tag, and selected category
   const filteredNotes = useMemo(() => {
     return publishedNotes.filter(note => {
       const matchSearch = 
@@ -27,10 +28,11 @@ export const ExploreHub: React.FC = () => {
         note.content.toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchTag = selectedTag ? note.tags.includes(selectedTag) : true;
+      const matchCategory = selectedCategory ? note.category === selectedCategory : true;
       
-      return matchSearch && matchTag;
+      return matchSearch && matchTag && matchCategory;
     });
-  }, [publishedNotes, searchQuery, selectedTag]);
+  }, [publishedNotes, searchQuery, selectedTag, selectedCategory]);
 
   // Get comment count helper
   // Since we refresh context data, we can check context comments reactively.
@@ -113,6 +115,42 @@ export const ExploreHub: React.FC = () => {
               color: 'var(--text-primary)'
             }}
           />
+        </div>
+
+        {/* Category Filter Pills */}
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '8px',
+          alignItems: 'center',
+          borderBottom: '1px solid var(--border-color)',
+          paddingBottom: '16px',
+          marginBottom: '4px'
+        }}>
+          {['全部', '科技', '教育', '生活', '筆記整理'].map(cat => {
+            const isSel = (cat === '全部' && selectedCategory === null) || selectedCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat === '全部' ? null : cat)}
+                style={{
+                  fontSize: '13px',
+                  padding: '6px 16px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid ' + (isSel ? 'var(--brand-primary)' : 'transparent'),
+                  background: isSel ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+                  color: isSel ? 'var(--brand-primary)' : 'var(--text-secondary)',
+                  fontWeight: isSel ? 700 : 500,
+                  cursor: 'pointer',
+                  transition: 'all var(--transition-fast)'
+                }}
+                onMouseEnter={(e) => { if (!isSel) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'; }}
+                onMouseLeave={(e) => { if (!isSel) e.currentTarget.style.background = 'transparent'; }}
+              >
+                {cat}
+              </button>
+            );
+          })}
         </div>
 
         {/* Tag Pills */}
@@ -209,6 +247,23 @@ export const ExploreHub: React.FC = () => {
                     background: note.coverImage || 'linear-gradient(135deg, #1f2336 0%, #151824 100%)',
                     position: 'relative'
                   }}>
+                    {note.category && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '12px',
+                        right: '12px',
+                        fontSize: '10.5px',
+                        fontWeight: 700,
+                        background: 'rgba(15, 23, 42, 0.65)',
+                        backdropFilter: 'blur(4px)',
+                        color: 'var(--brand-primary)',
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(255,255,255,0.05)'
+                      }}>
+                        {note.category}
+                      </span>
+                    )}
                     {/* Emoji badge */}
                     <div style={{
                       position: 'absolute',
@@ -289,18 +344,44 @@ export const ExploreHub: React.FC = () => {
 
                     {/* Tags sub-row */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '4px 0' }}>
-                      {note.tags.slice(0, 3).map(tag => (
-                        <span key={tag} style={{
-                          fontSize: '10px',
-                          fontWeight: 600,
-                          background: 'rgba(255,255,255,0.04)',
-                          color: 'var(--text-muted)',
-                          padding: '2px 8px',
-                          borderRadius: '10px'
-                        }}>
-                          #{tag}
-                        </span>
-                      ))}
+                      {note.tags.slice(0, 3).map(tag => {
+                        const isSubbed = currentUser?.subscribedTags?.includes(tag);
+                        return (
+                          <span key={tag} style={{
+                            fontSize: '10px',
+                            fontWeight: 600,
+                            background: isSubbed ? 'rgba(234, 179, 8, 0.08)' : 'rgba(255,255,255,0.04)',
+                            color: isSubbed ? '#eab308' : 'var(--text-muted)',
+                            padding: '2px 8px',
+                            borderRadius: '10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            <span>#{tag}</span>
+                            {currentUser && (
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  await toggleSubscribeTag(tag);
+                                }}
+                                title={isSubbed ? '取消訂閱標籤' : '訂閱標籤'}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: isSubbed ? '#eab308' : 'var(--text-muted)',
+                                  cursor: 'pointer',
+                                  padding: '1px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}
+                              >
+                                {isSubbed ? <BellOff size={8} /> : <Bell size={8} />}
+                              </button>
+                            )}
+                          </span>
+                        );
+                      })}
                     </div>
 
                     {/* Card Footer author/metrics */}
@@ -321,7 +402,7 @@ export const ExploreHub: React.FC = () => {
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '8px',
+                          gap: '6px',
                           cursor: 'pointer'
                         }}
                       >
@@ -337,6 +418,29 @@ export const ExploreHub: React.FC = () => {
                         }}>
                           {author.displayName}
                         </span>
+                        {currentUser && currentUser.id !== note.userId && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await toggleFollowUser(note.userId);
+                            }}
+                            title={currentUser.following?.includes(note.userId) ? '已追蹤創作者' : '追蹤創作者'}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              color: currentUser.following?.includes(note.userId) ? 'var(--brand-primary)' : 'var(--text-muted)',
+                              cursor: 'pointer',
+                              padding: '2px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: '4px',
+                              transition: 'all var(--transition-fast)'
+                            }}
+                          >
+                            {currentUser.following?.includes(note.userId) ? <UserMinus size={13} /> : <UserPlus size={13} />}
+                          </button>
+                        )}
                       </div>
 
                       {/* Engagement Counters */}

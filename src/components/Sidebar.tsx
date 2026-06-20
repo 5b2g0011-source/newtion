@@ -25,7 +25,8 @@ export const Sidebar: React.FC = () => {
     selectedUserId,
     isCloud,
     comments,
-    messages
+    messages,
+    readCommentIds
   } = useApp();
 
   const [theme, setTheme] = useState(() => {
@@ -52,7 +53,8 @@ export const Sidebar: React.FC = () => {
   const userNoteIdsForComments = new Set(userNotesForComments.map(n => n.id));
   const incomingComments = comments ? comments.filter(c => 
     userNoteIdsForComments.has(c.noteId) && 
-    c.userId !== (currentUser ? currentUser.id : 'guest')
+    c.userId !== (currentUser ? currentUser.id : 'guest') &&
+    !readCommentIds.includes(c.id)
   ) : [];
 
   const unreadMessages = messages ? messages.filter(m => 

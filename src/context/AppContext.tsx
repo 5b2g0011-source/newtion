@@ -3,7 +3,7 @@ import type { User, Note, Comment, ClickLogItem, Message } from '../types';
 import { db } from '../db';
 import { isFirebaseConfigured, auth, db as firestore } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, doc, getDoc, query, where, updateDoc, deleteField } from 'firebase/firestore';
+import { collection, onSnapshot, doc, query, where, updateDoc, deleteField } from 'firebase/firestore';
 
 interface AppContextType {
   currentUser: User | null;
@@ -19,6 +19,9 @@ interface AppContextType {
   authModalTab: 'login' | 'register';
   isCloud: boolean;
   clickHistory: ClickLogItem[];
+  readCommentIds: string[];
+  markCommentAsRead: (id: string) => void;
+  markAllCommentsAsReadForNote: (noteId: string) => void;
   
   // Modals & Sidebar toggles
   setSearchOpen: (open: boolean) => void;
@@ -43,6 +46,8 @@ interface AppContextType {
   addComment: (noteId: string, content: string) => Promise<void>;
   deleteComment: (commentId: string) => Promise<void>;
   toggleLike: (noteId: string) => Promise<void>;
+  toggleFollowUser: (targetUserId: string) => Promise<void>;
+  toggleSubscribeTag: (tag: string) => Promise<void>;
   clearClickHistory: () => void;
   removeClickHistoryItem: (id: string) => void;
   refreshData: () => void;
@@ -76,7 +81,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [userNotes, setUserNotes] = useState<Note[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
-  
+
+  // Refs to always access freshest state inside Firebase subscription callbacks
+  const currentUserRef = React.useRef(currentUser);
+  const notesRef = React.useRef<Note[]>([]);
+  const usersRef = React.useRef<User[]>([]);
+
+  React.useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+  React.useEffect(() => { usersRef.current = users; }, [users]);
+
+  // Track initial load to prevent notifications for old records on startup
+  const isFirstCommentsLoad = React.useRef(true);
+  const isFirstMessagesLoad = React.useRef(true);
+
+  // Helper to show HTML5 notification
+  const showNotification = React.useCallback((title: string, options?: NotificationOptions) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(title, options);
+      } catch (err) {
+        console.error('Notification display failed:', err);
+      }
+    }
+  }, []);
+
+  // Request browser notification permission on mount
+  React.useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
   // Guest notes state
   const [guestNotes, setGuestNotes] = useState<Note[]>(() => {
     const saved = sessionStorage.getItem('newtion_guest_notes');
@@ -126,6 +161,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return merged;
   }, [isFirebaseConfigured, localNotes, publicNotes, userNotes, guestNotes, currentUser]);
 
+  React.useEffect(() => { notesRef.current = notes; }, [notes]);
+
   // View states
   const [activeNoteId, setActiveNoteIdState] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'editor' | 'explore' | 'reader' | 'profile' | 'trash' | 'media' | 'home' | 'inbox'>('home'); // Home by default!
@@ -152,6 +189,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const removeClickHistoryItem = (id: string) => {
     setClickHistory(prev => prev.filter(item => item.id !== id));
+  };
+
+  // Comment read tracking
+  const [readCommentIds, setReadCommentIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('newtion_read_comments');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('newtion_read_comments', JSON.stringify(readCommentIds));
+  }, [readCommentIds]);
+
+  const markCommentAsRead = (id: string) => {
+    setReadCommentIds(prev => prev.includes(id) ? prev : [...prev, id]);
+  };
+
+  const markAllCommentsAsReadForNote = (noteId: string) => {
+    const noteComments = comments ? comments.filter(c => c.noteId === noteId) : [];
+    const idsToMark = noteComments.map(c => c.id).filter(id => !readCommentIds.includes(id));
+    if (idsToMark.length > 0) {
+      setReadCommentIds(prev => [...prev, ...idsToMark]);
+    }
   };
   
   // UI states
@@ -181,6 +244,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isFirebaseConfigured) {
       let unsubUserNotes: (() => void) | null = null;
       let unsubMessages: (() => void) | null = null;
+      let unsubUserDoc: (() => void) | null = null;
 
       // 1. Auth subscription
       const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -193,21 +257,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           unsubMessages();
           unsubMessages = null;
         }
+        if (unsubUserDoc) {
+          unsubUserDoc();
+          unsubUserDoc = null;
+        }
 
         if (firebaseUser) {
           const userDocRef = doc(firestore, 'users', firebaseUser.uid);
-          const snap = await getDoc(userDocRef);
-          if (snap.exists()) {
-            setCurrentUser(snap.data() as User);
-          } else {
-            setCurrentUser({
-              id: firebaseUser.uid,
-              username: firebaseUser.email?.split('@')[0] || firebaseUser.uid,
-              displayName: firebaseUser.displayName || 'Google 用戶',
-              avatarUrl: firebaseUser.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80',
-              createdAt: new Date().toISOString()
-            });
-          }
+          unsubUserDoc = onSnapshot(userDocRef, (snap) => {
+            if (snap.exists()) {
+              setCurrentUser(snap.data() as User);
+            } else {
+              setCurrentUser({
+                id: firebaseUser.uid,
+                username: firebaseUser.email?.split('@')[0] || firebaseUser.uid,
+                displayName: firebaseUser.displayName || 'Google 用戶',
+                avatarUrl: firebaseUser.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80',
+                createdAt: new Date().toISOString()
+              });
+            }
+          });
 
           // Subscribe to logged-in user's own notes
           const qUser = query(
@@ -266,6 +335,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const unsubReceived = onSnapshot(qReceived, (snap) => {
             receivedMsgs = snap.docs.map(doc => doc.data() as Message);
             updateMergedMessages();
+
+            if (isFirstMessagesLoad.current) {
+              isFirstMessagesLoad.current = false;
+              return;
+            }
+
+            snap.docChanges().forEach(change => {
+              if (change.type === 'added') {
+                const msg = change.doc.data() as Message;
+                if (currentUserRef.current && msg.receiverId === currentUserRef.current.id && msg.senderId !== currentUserRef.current.id) {
+                  const sender = usersRef.current.find(u => u.id === msg.senderId);
+                  const senderName = sender?.displayName || '未知用戶';
+                  showNotification('新私訊通知 ✉️', {
+                    body: `${senderName} 寄了一封信給你：${msg.subject}`,
+                    icon: sender?.avatarUrl || undefined
+                  });
+                }
+              }
+            });
           }, (err) => {
             console.error("Received messages sub error:", err);
           });
@@ -320,12 +408,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const unsubComments = onSnapshot(collection(firestore, 'comments'), (snapshot) => {
         const commentsList = snapshot.docs.map(doc => doc.data() as Comment);
         setComments(commentsList);
+
+        if (isFirstCommentsLoad.current) {
+          isFirstCommentsLoad.current = false;
+          return;
+        }
+
+        snapshot.docChanges().forEach(change => {
+          if (change.type === 'added') {
+            const comment = change.doc.data() as Comment;
+            if (currentUserRef.current && comment.userId !== currentUserRef.current.id) {
+              const commentNote = notesRef.current.find(n => n.id === comment.noteId);
+              if (commentNote && commentNote.userId === currentUserRef.current.id) {
+                const authorUser = usersRef.current.find(u => u.id === comment.userId);
+                const authorName = authorUser?.displayName || '有人';
+                showNotification('新留言通知 💬', {
+                  body: `${authorName} 在你的筆記「${commentNote.title}」留言了：${comment.content}`,
+                  icon: authorUser?.avatarUrl || undefined
+                });
+              }
+            }
+          }
+        });
       });
 
       return () => {
         unsubAuth();
         if (unsubUserNotes) unsubUserNotes();
         if (unsubMessages) unsubMessages();
+        if (unsubUserDoc) unsubUserDoc();
         unsubPublicNotes();
         unsubUsers();
         unsubComments();
@@ -681,6 +792,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const handleToggleFollow = async (targetUserId: string) => {
+    if (!currentUser) {
+      const guestUserJson = sessionStorage.getItem('newtion_guest_user') || JSON.stringify({
+        id: 'guest',
+        username: 'guest',
+        displayName: '訪客',
+        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80',
+        createdAt: new Date().toISOString(),
+        following: [],
+        subscribedTags: []
+      });
+      const guestUser = JSON.parse(guestUserJson) as User;
+      const following = guestUser.following || [];
+      const newFollowing = following.includes(targetUserId)
+        ? following.filter(id => id !== targetUserId)
+        : [...following, targetUserId];
+      guestUser.following = newFollowing;
+      sessionStorage.setItem('newtion_guest_user', JSON.stringify(guestUser));
+      setCurrentUser(guestUser);
+      return;
+    }
+    try {
+      const newFollowing = await db.toggleFollowUser(currentUser.id, targetUserId);
+      if (!isFirebaseConfigured) {
+        setCurrentUser(prev => prev ? { ...prev, following: newFollowing } : null);
+        refreshData();
+      }
+    } catch (err: any) {
+      console.error("追蹤失敗:", err);
+      alert("追蹤失敗，請重試：" + err.message);
+    }
+  };
+
+  const handleToggleSubscribeTag = async (tag: string) => {
+    if (!currentUser) {
+      const guestUserJson = sessionStorage.getItem('newtion_guest_user') || JSON.stringify({
+        id: 'guest',
+        username: 'guest',
+        displayName: '訪客',
+        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80',
+        createdAt: new Date().toISOString(),
+        following: [],
+        subscribedTags: []
+      });
+      const guestUser = JSON.parse(guestUserJson) as User;
+      const tags = guestUser.subscribedTags || [];
+      const newTags = tags.includes(tag)
+        ? tags.filter(t => t !== tag)
+        : [...tags, tag];
+      guestUser.subscribedTags = newTags;
+      sessionStorage.setItem('newtion_guest_user', JSON.stringify(guestUser));
+      setCurrentUser(guestUser);
+      return;
+    }
+    try {
+      const newTags = await db.toggleSubscribeTag(currentUser.id, tag);
+      if (!isFirebaseConfigured) {
+        setCurrentUser(prev => prev ? { ...prev, subscribedTags: newTags } : null);
+        refreshData();
+      }
+    } catch (err: any) {
+      console.error("訂閱標籤失敗:", err);
+      alert("訂閱標籤失敗，請重試：" + err.message);
+    }
+  };
+
   const handleSendMessage = async (
     receiverId: string, 
     subject: string, 
@@ -736,6 +913,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveNoteId,
         navigateToView,
         clickHistory,
+        readCommentIds,
+        markCommentAsRead,
+        markAllCommentsAsReadForNote,
         clearClickHistory,
         removeClickHistoryItem,
         loginWithGoogle: handleLoginWithGoogle,
@@ -751,6 +931,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addComment: handleAddComment,
         deleteComment: handleDeleteComment,
         toggleLike: handleToggleLike,
+        toggleFollowUser: handleToggleFollow,
+        toggleSubscribeTag: handleToggleSubscribeTag,
         messages,
         sendMessage: handleSendMessage,
         deleteMessage: handleDeleteMessage,

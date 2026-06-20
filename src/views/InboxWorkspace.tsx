@@ -18,7 +18,10 @@ export const InboxWorkspace: React.FC = () => {
     markMessageAsRead,
     navigateToView,
     createNote,
-    updateNote
+    updateNote,
+    addComment,
+    readCommentIds,
+    markCommentAsRead
   } = useApp();
 
   const currentUserId = currentUser ? currentUser.id : 'guest';
@@ -26,6 +29,8 @@ export const InboxWorkspace: React.FC = () => {
   // Navigation folders inside Inbox
   const [folder, setFolder] = useState<'inbox' | 'sent' | 'notifications'>('inbox');
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   
   // Compose modal states
@@ -34,6 +39,8 @@ export const InboxWorkspace: React.FC = () => {
   const [composeSubject, setComposeSubject] = useState('');
   const [composeContent, setComposeContent] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
 
   // Get unread counts
   const unreadMessagesCount = messages ? messages.filter(m => m.receiverId === currentUserId && !m.isRead).length : 0;
@@ -42,7 +49,8 @@ export const InboxWorkspace: React.FC = () => {
   const userNotesForComments = notes.filter(n => !n.isTrash && (currentUser ? n.userId === currentUser.id : n.userId === 'guest'));
   const userNoteIdsForComments = new Set(userNotesForComments.map(n => n.id));
   const commentNotifications = comments ? comments.filter(c => 
-    userNoteIdsForComments.has(c.noteId) && c.userId !== currentUserId
+    userNoteIdsForComments.has(c.noteId) && c.userId !== currentUserId &&
+    !readCommentIds.includes(c.id)
   ) : [];
 
   // Filtered Messages / Comments based on folder & search
@@ -65,14 +73,40 @@ export const InboxWorkspace: React.FC = () => {
   });
 
   const selectedMessage = messages ? messages.find(m => m.id === selectedMessageId) : null;
+  const selectedComment = comments ? comments.find(c => c.id === selectedCommentId) : null;
+  const selectedCommentNote = selectedComment ? notes.find(n => n.id === selectedComment.noteId) : null;
+  const selectedCommenter = selectedComment ? users.find(u => u.id === selectedComment.userId) : null;
 
   // Recipient list (all users excluding current user)
   const recipients = users.filter(u => u.id !== currentUserId);
+
+  const filteredRecipients = userSearchQuery.trim() === ''
+    ? []
+    : recipients.filter(u => 
+        u.displayName.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+        u.username.toLowerCase().includes(userSearchQuery.toLowerCase())
+      );
+
+  const selectedRecipient = users.find(u => u.id === composeTo);
 
   const handleSelectMessage = (msg: Message) => {
     setSelectedMessageId(msg.id);
     if (msg.receiverId === currentUserId && !msg.isRead) {
       markMessageAsRead(msg.id);
+    }
+  };
+
+  const handleSendCommentReply = async () => {
+    if (!replyText.trim() || !selectedComment) return;
+    try {
+      await addComment(selectedComment.noteId, replyText.trim());
+      markCommentAsRead(selectedComment.id);
+      setReplyText('');
+      setSelectedCommentId(null);
+      alert('回覆留言成功！紅點點通知已清除。');
+    } catch (err) {
+      console.error('Failed to reply to comment:', err);
+      alert('回覆失敗，請重試！');
     }
   };
 
@@ -85,6 +119,8 @@ export const InboxWorkspace: React.FC = () => {
     setIsSending(true);
     try {
       await sendMessage(composeTo, composeSubject, composeContent);
+      setComposeTo('');
+      setUserSearchQuery('');
       setComposeSubject('');
       setComposeContent('');
       setShowCompose(false);
@@ -139,11 +175,9 @@ export const InboxWorkspace: React.FC = () => {
         {/* Compose Button */}
         <button
           onClick={() => {
-            if (recipients.length === 0) {
-              alert('系統中尚無其他註冊使用者！');
-              return;
-            }
-            setComposeTo(recipients[0].id);
+            setComposeTo('');
+            setUserSearchQuery('');
+            setShowSearchDropdown(false);
             setComposeSubject('');
             setComposeContent('');
             setShowCompose(true);
@@ -175,6 +209,7 @@ export const InboxWorkspace: React.FC = () => {
             onClick={() => {
               setFolder('inbox');
               setSelectedMessageId(null);
+              setSelectedCommentId(null);
             }}
             style={{
               width: '100%',
@@ -209,6 +244,7 @@ export const InboxWorkspace: React.FC = () => {
             onClick={() => {
               setFolder('sent');
               setSelectedMessageId(null);
+              setSelectedCommentId(null);
             }}
             style={{
               width: '100%',
@@ -233,6 +269,7 @@ export const InboxWorkspace: React.FC = () => {
             onClick={() => {
               setFolder('notifications');
               setSelectedMessageId(null);
+              setSelectedCommentId(null);
             }}
             style={{
               width: '100%',
@@ -447,28 +484,32 @@ export const InboxWorkspace: React.FC = () => {
               filteredComments.map(comment => {
                 const commenter = users.find(u => u.id === comment.userId);
                 const note = notes.find(n => n.id === comment.noteId);
+                const isSelected = selectedCommentId === comment.id;
                 return (
                   <div
                     key={comment.id}
                     onClick={() => {
-                      if (note) {
-                        const isOwner = currentUser ? note.userId === currentUser.id : note.userId === 'guest';
-                        navigateToView(isOwner ? 'editor' : 'reader', note.id);
-                      }
+                      setSelectedCommentId(comment.id);
+                      setSelectedMessageId(null);
+                      markCommentAsRead(comment.id);
                     }}
                     style={{
                       padding: '12px',
                       borderRadius: 'var(--radius-md)',
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border-color)',
+                      background: isSelected ? 'rgba(236, 72, 153, 0.08)' : 'var(--bg-card)',
+                      border: '1px solid ' + (isSelected ? 'var(--brand-secondary)' : 'var(--border-color)'),
                       cursor: 'pointer',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '6px',
                       transition: 'border-color var(--transition-fast)'
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--brand-secondary)'}
-                    onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-color)'}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) e.currentTarget.style.borderColor = 'var(--brand-secondary)';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) e.currentTarget.style.borderColor = 'var(--border-color)';
+                    }}
                   >
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <img
@@ -723,6 +764,154 @@ export const InboxWorkspace: React.FC = () => {
               )}
             </div>
           </div>
+        ) : selectedComment ? (
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            overflow: 'hidden'
+          }}>
+            {/* Top Toolbar */}
+            <div style={{
+              padding: '16px 24px',
+              borderBottom: '1px solid var(--border-color)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'rgba(255, 255, 255, 0.01)',
+              flexShrink: 0
+            }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                留言回覆與互動
+              </div>
+              <button
+                onClick={() => {
+                  if (selectedCommentNote) {
+                    navigateToView('reader', selectedCommentNote.id);
+                  }
+                }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border-color)',
+                  fontSize: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  transition: 'background var(--transition-fast)'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-input)'}
+              >
+                <Bell size={13} style={{ color: 'var(--brand-secondary)' }} />
+                <span>開啟完整筆記頁面</span>
+              </button>
+            </div>
+
+            {/* Scrollable area */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '28px 24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '24px'
+            }}>
+              {/* Comment Header */}
+              <div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <img
+                    src={selectedCommenter?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80'}
+                    style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {selectedCommenter?.displayName || '訪客'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      時間：{new Date(selectedComment.createdAt).toLocaleString('zh-TW')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border-color)' }} />
+
+              {/* Note context info */}
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                在您的筆記「<span style={{ fontWeight: 600, color: 'var(--brand-secondary)' }}>{selectedCommentNote?.title || '未命名'}</span>」中發表了留言：
+              </div>
+
+              {/* Comment content */}
+              <div style={{
+                fontSize: '14px',
+                lineHeight: '1.6',
+                color: 'var(--text-primary)',
+                padding: '12px 16px',
+                background: 'rgba(255,255,255,0.02)',
+                borderLeft: '4px solid var(--brand-secondary)',
+                borderRadius: '4px',
+                fontFamily: 'var(--font-sans)',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
+              }}>
+                {selectedComment.content}
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '12px' }} />
+
+              {/* Inline Reply Input */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  回覆此留言：
+                </label>
+                <textarea
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder={`@${selectedCommenter?.username || 'user'} 輸入您的回覆內容...`}
+                  style={{
+                    width: '100%',
+                    height: '100px',
+                    padding: '10px 12px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-primary)',
+                    fontSize: '13px',
+                    outline: 'none',
+                    resize: 'none',
+                    fontFamily: 'inherit'
+                  }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={handleSendCommentReply}
+                    disabled={!replyText.trim()}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 'var(--radius-md)',
+                      background: replyText.trim() ? 'var(--brand-secondary)' : 'var(--text-muted)',
+                      color: '#ffffff',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      border: 'none',
+                      cursor: replyText.trim() ? 'pointer' : 'default',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all var(--transition-fast)'
+                    }}
+                  >
+                    <CornerUpLeft size={13} />
+                    <span>送出回覆</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : (
           <div style={{
             flex: 1,
@@ -734,7 +923,9 @@ export const InboxWorkspace: React.FC = () => {
             gap: '12px'
           }}>
             <Mail size={48} style={{ color: 'var(--text-muted)', opacity: 0.2 }} />
-            <span style={{ fontSize: '13px' }}>請從列表中選擇信件來閱讀。</span>
+            <span style={{ fontSize: '13px' }}>
+              {folder === 'notifications' ? '請從列表中選擇留言通知來查看與回覆。' : '請從列表中選擇信件來閱讀。'}
+            </span>
           </div>
         )}
       </div>
@@ -800,28 +991,137 @@ export const InboxWorkspace: React.FC = () => {
             {/* Form Fields */}
             <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', flex: 1, overflowY: 'auto' }}>
               {/* Recipient select */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', position: 'relative' }}>
                 <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>收件人</label>
-                <select
-                  value={composeTo}
-                  onChange={(e) => setComposeTo(e.target.value)}
-                  required
-                  style={{
-                    padding: '8px 10px',
+                {selectedRecipient ? (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
                     borderRadius: 'var(--radius-sm)',
                     border: '1px solid var(--border-color)',
                     background: 'var(--bg-input)',
-                    color: 'var(--text-primary)',
                     fontSize: '13px',
-                    outline: 'none'
-                  }}
-                >
-                  {recipients.map(user => (
-                    <option key={user.id} value={user.id}>
-                      {user.displayName} (@{user.username})
-                    </option>
-                  ))}
-                </select>
+                    color: 'var(--text-primary)'
+                  }}>
+                    <span style={{ fontWeight: 500 }}>
+                      {selectedRecipient.displayName} (@{selectedRecipient.username})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setComposeTo('');
+                        setUserSearchQuery('');
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        padding: '2px'
+                      }}
+                      onMouseEnter={(e)=>e.currentTarget.style.color='var(--text-primary)'}
+                      onMouseLeave={(e)=>e.currentTarget.style.color='var(--text-secondary)'}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+                      <input
+                        type="text"
+                        placeholder="搜尋收件人 (請輸入姓名或帳號)..."
+                        value={userSearchQuery}
+                        onChange={(e) => {
+                          setUserSearchQuery(e.target.value);
+                          setShowSearchDropdown(true);
+                        }}
+                        onFocus={() => setShowSearchDropdown(true)}
+                        onBlur={() => {
+                          setTimeout(() => {
+                            setShowSearchDropdown(false);
+                          }, 200);
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px 8px 30px',
+                          borderRadius: 'var(--radius-sm)',
+                          border: '1px solid var(--border-color)',
+                          background: 'var(--bg-input)',
+                          color: 'var(--text-primary)',
+                          fontSize: '13px',
+                          outline: 'none'
+                        }}
+                      />
+                      <Search 
+                        size={14} 
+                        style={{ 
+                          position: 'absolute', 
+                          left: '10px', 
+                          color: 'var(--text-secondary)',
+                          pointerEvents: 'none'
+                        }} 
+                      />
+                    </div>
+                    {showSearchDropdown && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        background: 'var(--bg-popover)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-sm)',
+                        boxShadow: 'var(--shadow-md)',
+                        maxHeight: '180px',
+                        overflowY: 'auto',
+                        zIndex: 10002,
+                        marginTop: '4px'
+                      }}>
+                        {filteredRecipients.length > 0 ? (
+                          filteredRecipients.map(user => (
+                            <div
+                              key={user.id}
+                              onClick={() => {
+                                setComposeTo(user.id);
+                                setShowSearchDropdown(false);
+                              }}
+                              style={{
+                                padding: '8px 12px',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                color: 'var(--text-primary)',
+                                transition: 'background 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-input)'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                            >
+                              {user.avatarUrl && (
+                                <img 
+                                  src={user.avatarUrl} 
+                                  alt={user.displayName} 
+                                  style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} 
+                                />
+                              )}
+                              <span>{user.displayName}</span>
+                              <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>@{user.username}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ padding: '10px 12px', fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                            {userSearchQuery.trim() ? '找不到相符的使用者' : '請輸入關鍵字搜尋...'}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Subject */}

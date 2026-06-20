@@ -18,7 +18,7 @@ const ALERT_MAP: Record<string, { title: string; icon: string }> = {
 };
 
 // Math parsing pre-processor
-const renderMath = (text: string): string => {
+export const renderMath = (text: string): string => {
   const codeBlocks: string[] = [];
   
   // 1. Shield code blocks (```...```)

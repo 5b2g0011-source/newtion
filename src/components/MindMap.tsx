@@ -6,6 +6,19 @@ import {
   Trash2, Link, X, Share2, Globe, Lock, LayoutTemplate, ChevronDown
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from 'firebase/firestore';
+import { db as firestore, isFirebaseConfigured } from '../firebase';
+import type { Presence } from '../types';
+
+const CURSOR_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#14b8a6'];
+const getUserColor = (userId: string) => {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % CURSOR_COLORS.length;
+  return CURSOR_COLORS[index];
+};
 
 interface MindMapProps {
   note: Note;
@@ -309,6 +322,62 @@ export const MindMap: React.FC<MindMapProps> = ({ note, readOnly = false }) => {
 
   // Selected Node State
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [presences, setPresences] = useState<Presence[]>([]);
+
+  // Sync own selected node & listen to other presences
+  useEffect(() => {
+    if (!isFirebaseConfigured || !currentUser) return;
+    
+    const presenceId = `${note.id}_${currentUser.id}`;
+    const docRef = doc(firestore, 'note_presence', presenceId);
+    const color = getUserColor(currentUser.id);
+    
+    const updateOwnPresence = async (nodeIdVal?: string | null) => {
+      try {
+        await setDoc(docRef, {
+          id: presenceId,
+          noteId: note.id,
+          userId: currentUser.id,
+          userName: currentUser.displayName || currentUser.username,
+          avatarUrl: currentUser.avatarUrl,
+          nodeId: nodeIdVal || null,
+          lastActive: Date.now(),
+          color
+        });
+      } catch (err) {
+        console.error('Update presence failed:', err);
+      }
+    };
+
+    updateOwnPresence(selectedNodeId);
+    
+    const presenceInterval = setInterval(() => {
+      updateOwnPresence(selectedNodeId);
+    }, 10000);
+    
+    const q = query(
+      collection(firestore, 'note_presence'),
+      where('noteId', '==', note.id)
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const now = Date.now();
+      const activePresences: Presence[] = [];
+      snapshot.forEach((snapDoc) => {
+        const p = snapDoc.data() as Presence;
+        if (p.userId !== currentUser.id && (now - p.lastActive < 30000)) {
+          activePresences.push(p);
+        }
+      });
+      setPresences(activePresences);
+    });
+    
+    return () => {
+      clearInterval(presenceInterval);
+      unsubscribe();
+      deleteDoc(docRef).catch(err => console.error('Delete presence failed:', err));
+    };
+  }, [note.id, currentUser, selectedNodeId]);
 
   // Share dropdown state
   const [showShareDropdown, setShowShareDropdown] = useState(false);
@@ -1684,6 +1753,8 @@ export const MindMap: React.FC<MindMapProps> = ({ note, readOnly = false }) => {
             const isEditing = editingNodeId === node.id;
             const isTargetOfConnect = connectingSourceId !== null && connectingSourceId !== node.id;
 
+            const nodePresences = presences.filter(p => p.nodeId === node.id);
+
             return (
               <g
                 key={node.id}
@@ -1695,6 +1766,51 @@ export const MindMap: React.FC<MindMapProps> = ({ note, readOnly = false }) => {
               >
                 {/* Node Shape */}
                 {renderShapeElement(node, isSelected)}
+
+                {/* Collaborative Selection Contours */}
+                {nodePresences.map((p, idx) => (
+                  <rect
+                    key={p.userId}
+                    x={-node.width / 2 - 4 - idx * 3}
+                    y={-node.height / 2 - 4 - idx * 3}
+                    width={node.width + 8 + idx * 6}
+                    height={node.height + 8 + idx * 6}
+                    fill="none"
+                    stroke={p.color}
+                    strokeWidth={2}
+                    strokeDasharray="4 2"
+                    rx={6}
+                    ry={6}
+                    style={{ pointerEvents: 'none' }}
+                  />
+                ))}
+
+                {/* Collaborative User Avatars */}
+                {nodePresences.map((p, idx) => (
+                  <g 
+                    key={p.userId} 
+                    transform={`translate(${node.width / 2 - 12 - idx * 18}, ${-node.height / 2 - 12})`}
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    <circle
+                      cx={8}
+                      cy={8}
+                      r={9}
+                      fill={p.color}
+                    />
+                    <clipPath id={`avatar-clip-${p.userId}`}>
+                      <circle cx={8} cy={8} r={8} />
+                    </clipPath>
+                    <image
+                      href={p.avatarUrl}
+                      x={0}
+                      y={0}
+                      width={16}
+                      height={16}
+                      clipPath={`url(#avatar-clip-${p.userId})`}
+                    />
+                  </g>
+                ))}
 
                 {/* Node Name Text / Input Box Overlay */}
                 <foreignObject

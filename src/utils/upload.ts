@@ -56,7 +56,7 @@ export const uploadImage = async (file: File): Promise<string> => {
     throw new Error('檔案大小不能超過 5MB');
   }
 
-  const imgbbApiKey = localStorage.getItem('newtion_imgbb_api_key');
+  const imgbbApiKey = localStorage.getItem('newtion_imgbb_api_key') || import.meta.env.VITE_IMGBB_API_KEY;
 
   if (imgbbApiKey && imgbbApiKey.trim() !== '') {
     try {

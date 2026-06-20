@@ -144,6 +144,36 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ noteId }) => {
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                         {formatTime(comment.createdAt)}
                       </span>
+                      {!isCommentOwner && (
+                        <button
+                          onClick={() => {
+                            setNewComment(prev => {
+                              const prefix = `@${author.username} `;
+                              return prev.startsWith(prefix) ? prev : prefix + prev;
+                            });
+                            const inputEl = document.getElementById('comment-input-field');
+                            if (inputEl) {
+                              inputEl.focus();
+                            }
+                          }}
+                          title="回覆此留言"
+                          style={{
+                            color: 'var(--text-muted)',
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '2px',
+                            padding: 0
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--brand-secondary)'}
+                          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+                        >
+                          <span>回覆</span>
+                        </button>
+                      )}
                       {isCommentOwner && (
                         <button
                           onClick={() => {
@@ -154,10 +184,13 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ noteId }) => {
                           title="刪除留言"
                           style={{
                             color: 'var(--text-muted)',
+                            background: 'transparent',
+                            border: 'none',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'center'
+                            justifyContent: 'center',
+                            padding: 0
                           }}
                           onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent-error)'}
                           onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
@@ -198,6 +231,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ noteId }) => {
           />
           <div style={{ flex: 1, position: 'relative' }}>
             <textarea
+              id="comment-input-field"
               placeholder="撰寫留言，參與討論..."
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}

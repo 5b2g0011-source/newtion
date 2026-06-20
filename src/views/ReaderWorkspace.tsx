@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { MarkdownPreview } from '../components/MarkdownPreview';
 import { TableOfContents } from '../components/TableOfContents';
@@ -15,12 +15,20 @@ export const ReaderWorkspace: React.FC = () => {
     users, 
     currentUser, 
     toggleLike, 
-    navigateToView 
+    navigateToView,
+    isCloud,
+    markAllCommentsAsReadForNote
   } = useApp();
 
   const previewRef = useRef<HTMLDivElement>(null);
   
   const note = notes.find(n => n.id === selectedReaderNoteId);
+
+  useEffect(() => {
+    if (note) {
+      markAllCommentsAsReadForNote(note.id);
+    }
+  }, [note?.id, markAllCommentsAsReadForNote]);
 
   if (!note) {
     return (
@@ -105,9 +113,15 @@ export const ReaderWorkspace: React.FC = () => {
             <span>返回探索廣場</span>
           </button>
 
-          {isOwner && (
+          {(isOwner || note.isPublished) && (
             <button
-              onClick={() => navigateToView('editor', note.id)}
+              onClick={() => {
+                if (isCloud && !currentUser) {
+                  alert('請先登入以進行協同編輯！');
+                  return;
+                }
+                navigateToView('editor', note.id);
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -124,7 +138,7 @@ export const ReaderWorkspace: React.FC = () => {
               }}
             >
               <Edit3 size={14} />
-              <span>進入編輯模式</span>
+              <span>{isOwner ? '進入編輯模式' : '加入協同編輯'}</span>
             </button>
           )}
         </div>

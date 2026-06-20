@@ -4,6 +4,8 @@ export interface User {
   displayName: string;
   avatarUrl: string;
   createdAt: string;
+  following?: string[]; // creator user IDs followed by this user
+  subscribedTags?: string[]; // tag names subscribed by this user
 }
 
 export interface Note {
@@ -22,6 +24,7 @@ export interface Note {
   coverImage: string | null; // Cover picture selection
   icon: string | null; // Emoji symbol selection
   isTrash?: boolean; // Trash can soft-delete indicator
+  category?: string; // Article category (科技, 教育, 生活, 筆記整理)
 }
 
 export interface Comment {
@@ -118,5 +121,17 @@ export interface Message {
     icon: string | null;
     coverImage: string | null;
   };
+}
+
+export interface Presence {
+  id: string; // noteId_userId
+  noteId: string;
+  userId: string;
+  userName: string;
+  avatarUrl: string;
+  cursorIndex?: number; // character index for text editor
+  nodeId?: string; // for mindmap node selection
+  lastActive: number; // timestamp
+  color: string; // user's cursor color
 }
 
