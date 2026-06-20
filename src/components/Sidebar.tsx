@@ -46,7 +46,7 @@ export const Sidebar: React.FC = () => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
-  const [activeHelpTab, setActiveHelpTab] = useState<'overview' | 'editor' | 'mindmap' | 'ai' | 'pages'>('overview');
+  const [activeHelpTab, setActiveHelpTab] = useState<'overview' | 'editor' | 'mindmap' | 'quiz' | 'ai' | 'pages'>('overview');
 
   // Get notifications for Inbox
   const userNotesForComments = notes.filter(n => !n.isTrash && (currentUser ? n.userId === currentUser.id : n.userId === 'guest'));
@@ -1002,6 +1002,7 @@ export const Sidebar: React.FC = () => {
                 { id: 'overview', label: '🚀 系統總覽' },
                 { id: 'editor', label: '✍️ 編輯與語法' },
                 { id: 'mindmap', label: '🧠 畫布心智圖' },
+                { id: 'quiz', label: '❓ 互動線上測驗' },
                 { id: 'ai', label: '🤖 AI 智慧助手' },
                 { id: 'pages', label: '📂 頁面與社群' }
               ] as const).map(tab => (
@@ -1046,14 +1047,16 @@ export const Sidebar: React.FC = () => {
                   <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <li><b>📄 筆記編輯器</b>：完美相容標準 Markdown 格式，支援精美 KaTeX 數學公式、自動產生左側大綱目錄，並可一鍵下載匯出筆記檔案。</li>
                     <li><b>🧠 畫布心智圖</b>：提供自由拖曳與長寬縮放、關係線連接，內建經典範本與 9 種視覺圖形形狀（支援矩形、圓形、三角形、平行四邊形、圓柱體等），可直接匯出向量 SVG 檔。</li>
-                    <li><b>❓ 線上測驗</b>：支援針對筆記或心智圖，利用 AI 自動生成或手動編輯專屬測驗題，提升學習與記憶效率。</li>
-                    <li><b>📂 媒體櫃</b>：統一管理所有上傳的背景封面與內文圖片附件，方便隨時調用。</li>
+                    <li><b>❓ 互動線上測驗</b>：支援針對關鍵主題或筆記內容，利用 AI 自動生成或手動編輯專屬測驗題，提升學習與記憶效率。</li>
+                    <li><b>📂 媒體櫃 (歷程追蹤)</b>：統一追蹤您點擊與瀏覽過的筆記、心智圖、測驗以及個人檔案等歷程資料，可隨時快速切換、清除或回溯。</li>
+                    <li><b>📥 站內收件夾</b>：整合了 Inbox (收到訊息)、Sent (已傳送) 與 Notifications (留言與互動通知)，讓您能與平台上的其他創作者保持最即時的交流與協作。</li>
+                    <li><b>🔑 自訂 API 金鑰</b>：點擊側邊欄底部的「自訂 API 金鑰」即可設定您個人的 OpenRouter API 金鑰，使用您最喜歡的 AI 模型為寫作與出題提供強大動力。</li>
                     <li><b>🎨 主題配色</b>：點擊側邊欄底部的主題下拉選單，即可一鍵切換預設深色、明亮模式、復古暖沙、森林綠意等四種視覺配色。</li>
                   </ul>
 
                   <h4 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginTop: '8px' }}>⌨️ 全域快捷鍵</h4>
                   <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <li>鍵盤按下 <code>Ctrl + P</code> (或 macOS <code>Cmd + P</code>) 可以立刻喚起全域模糊搜尋框，快速尋找並切換至任何筆記或心智圖頁面。</li>
+                    <li>鍵盤按下 <code>Ctrl + P</code> (或 macOS <code>Cmd + P</code>) 可以立刻喚起全域模糊搜尋框，快速尋找並切換至任何筆記、心智圖或線上測驗。</li>
                   </ul>
                 </div>
               )}
@@ -1067,7 +1070,7 @@ export const Sidebar: React.FC = () => {
                   <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <li><b>標題結構</b>：輸入 <code># 標題一</code>、<code>## 標題二</code>、<code>### 標題三</code> 來設定不同層級的大小。</li>
                     <li><b>字體樣式</b>：使用 <code>**粗體文字**</code> 表達核心重點，<code>*斜體文字*</code> 與 <code>~~刪除線~~</code> 則做為輔助標註。</li>
-                    <li><b>引用與清單</b>：以 <code>&gt; 引用內容</code> 建立 Notion 風格的精美引用區塊；使用 <code>- 項目</code> 建立無序清單。</li>
+                    <li><b>引用與清單</b>：以 <code>&gt; 引用內容</code> 建立 Notion 風格的精美引用區塊；使用 <code>- 項目</code> 建立無序清單；使用 <code>- [ ]</code> 建立待辦清單。</li>
                     <li><b>程式碼區塊</b>：輸入三個反單引號並指定語言（如 <code>```typescript ... ```</code>）即可渲染精美的程式碼高亮排版。</li>
                   </ul>
 
@@ -1109,6 +1112,47 @@ export const Sidebar: React.FC = () => {
                 </div>
               )}
 
+              {activeHelpTab === 'quiz' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <h3 style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 700 }}>❓ 互動線上測驗操作說明</h3>
+                  <p>互動線上測驗提供知識點評估與自學複習空間，支援進行測驗、自訂編輯題目以及強大的 AI 智慧出題輔助：</p>
+
+                  <h4 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginTop: '8px' }}>1. 進行測驗 (Play 模式)</h4>
+                  <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <li><b>即時反饋與解析</b>：作答時，點選選項會立刻顯示該題目的對錯答案以及詳細的邏輯解析。</li>
+                    <li><b>作答統計分析</b>：完成整份測驗後，系統會生成直覺的統計圖表，分析答對率及表現；若獲得滿分 (100%)，將會觸發精美的滿分彩帶特效。</li>
+                  </ul>
+
+                  <h4 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginTop: '8px' }}>2. 編輯題目 (Edit 模式)</h4>
+                  <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <li><b>基本資訊設定</b>：在編輯分頁中，您可以直接修改測驗的「標題」與「說明描述」，系統會即時存檔。</li>
+                    <li><b>手動新增與修改</b>：點擊「新增問題」可直接在表格內輸入問題、設定 4 個選項、指定正確選項，並撰寫題目解析。</li>
+                    <li><b>移除題目</b>：對於不需要的題目，可以直接點擊右側的垃圾桶圖示進行刪除。</li>
+                  </ul>
+
+                  <h4 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginTop: '8px' }}>3. 🤖 AI 智慧出題輔助</h4>
+                  <p>點擊「AI 智慧出題」以調用頂尖的語言模型為您自動產生專屬測驗：</p>
+                  <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <li><b>設定 API 金鑰</b>：可填入個人的 OpenRouter 金鑰並選擇合適的模型（如 Gemini 2.5 Flash, Llama 3 8B 等）。</li>
+                    <li><b>主題/關鍵字出題</b>：輸入例如「JavaScript 閉包」或「線性代數矩陣運算」等主題。</li>
+                    <li><b>讀取筆記內容出題</b>：直接從您現有的筆記中選擇一篇，讓 AI 基於筆記的知識點進行命題。</li>
+                    <li>支援選擇出題數量為 3 題、5 題或 10 題。</li>
+                  </ul>
+
+                  <h4 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginTop: '8px' }}>4. 📝 純文字題目貼上匯入</h4>
+                  <p>點擊「純文字匯入」按鈕，您可以將符合下方格式的題目純文字直接貼上，系統將會一鍵解析並成功匯入（題目之間請空一行）：</p>
+                  <pre style={{ margin: 0, padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.01)', overflowX: 'auto', fontFamily: 'monospace' }}>
+{`1. 題目內容字串？
+A. 選項一
+B. 選項二
+C. 選項三
+D. 選項四
+答案：C
+解析：這是一題解析說明的範例文字。`}
+                  </pre>
+                </div>
+              )}
+
               {activeHelpTab === 'ai' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <h3 style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 700 }}>🤖 AI 智慧寫作與協作指南</h3>
@@ -1136,19 +1180,31 @@ export const Sidebar: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <h3 style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 700 }}>📂 筆記目錄、個人檔案與社群發布</h3>
 
-                  <h4 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginTop: '8px' }}>1. 樹狀階層管理</h4>
-                  <p>側邊欄的「私人」分區列出了所有筆記與圖形。滑鼠移到頁面上時，點擊右側的 <code>+</code> 圖示可以無限層級地建立子頁面。拖曳頁面可以重新排列目錄樹。點選垃圾桶圖示則會將筆記移入垃圾桶。</p>
+                  <h4 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginTop: '8px' }}>1. 樹狀階層管理與垃圾桶</h4>
+                  <p>側邊欄的「私人」分區列出了所有筆記與圖形。滑鼠移到頁面上時，點擊右側的 <code>+</code> 圖示可以無限層級地建立子頁面。拖曳頁面可以重新排列目錄樹。點選垃圾桶圖示則會將筆記移入垃圾桶。在「垃圾桶」工作區，您可以還原頁面，或將其永久刪除。</p>
 
-                  <h4 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginTop: '8px' }}>2. 📈 寫作貢獻圖 (GitHub Commit 風格)</h4>
+                  <h4 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginTop: '8px' }}>2. 探索廣場與社群互動</h4>
+                  <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <li><b>訂閱與追蹤</b>：在「探索廣場」中可以追蹤您喜愛的創作者或訂閱特定標籤。被訂閱的內容會聚合呈現在主頁的「推薦與訂閱牆 ✨」。</li>
+                    <li><b>互動與點讚</b>：在閱讀模式中，您可以對公開文章點讚、發表評論與留言進行交流。</li>
+                    <li><b>站內信分享</b>：您可以點擊「分享與發送」將筆記直接傳送給系統中的其他使用者。</li>
+                  </ul>
+
+                  <h4 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginTop: '8px' }}>3. 📥 站內收件夾 (Message Box)</h4>
+                  <p>側邊欄「收件夾」內建三個信匣：</p>
+                  <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <li><b>收件夾</b>：接收來自其他使用者直接發送的筆記或信件。</li>
+                    <li><b>已傳送</b>：追蹤您過去寄出給其他人的信件與筆記。</li>
+                    <li><b>通知中心</b>：當有人評論您的公開筆記時，會收到留言通知，您可以點擊一鍵快速回覆留言。</li>
+                  </ul>
+
+                  <h4 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginTop: '8px' }}>4. 📈 寫作貢獻圖 (GitHub Commit 風格)</h4>
                   <p>點選進入「我的個人檔案」，您會看到精美的寫作貢獻日曆（熱力圖），記錄您每日的創作足跡：</p>
                   <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <li>建立一個新頁面/心智圖：當日寫作貢獻 <b>+2</b> 分。</li>
+                    <li>建立一個新頁面/心智圖/線上測驗：當日寫作貢獻 <b>+2</b> 分。</li>
                     <li>編輯/更新現有的筆記內容：當日寫作貢獻 <b>+1</b> 分。</li>
                     <li>貢獻越多，當天的方格顏色越深。快來畫滿您的專屬寫作牆吧！</li>
                   </ul>
-
-                  <h4 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginTop: '8px' }}>3. 分享與公開發布</h4>
-                  <p>在筆記編輯器或心智圖的右上角點選「分享發布」並啟用，便能生成公開網址，同時該筆記會呈現在「探索廣場」中，允許其他創作者點讚或留言與您交流互動。</p>
                 </div>
               )}
             </div>
