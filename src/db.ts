@@ -124,7 +124,7 @@ export const handleAuthError = (err: any) => {
   } else if (code === 'auth/popup-closed-by-user') {
     console.warn('Google login popup closed by user.');
   } else if (code === 'auth/popup-blocked') {
-    alert('登入視窗被瀏覽器封鎖！請在瀏覽器設定中允許此網站開啟彈出式視窗，或使用 Safari/Chrome 等標準瀏覽器開啟。');
+    //alert('登入視窗被瀏覽器封鎖！請在瀏覽器設定中允許此網站開啟彈出式視窗，或使用 Safari/Chrome 等標準瀏覽器開啟。');
   } else {
     alert(`Google 登入失敗：\n[${code || 'Error'}] ${err?.message || err}`);
   }
